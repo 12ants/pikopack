@@ -1,0 +1,77 @@
+import { create } from 'zustand';
+
+export const LOCATIONS: [number, number, number][] = [];
+
+// Intersections
+const intersections = [-120, -40, 40, 120];
+for (const x of intersections) {
+  for (const z of intersections) {
+    LOCATIONS.push([x, 0, z]);
+  }
+}
+
+// Mid-roads
+const blockCenters = [-160, -80, 0, 80, 160];
+for (const x of blockCenters) {
+  for (const z of intersections) {
+    LOCATIONS.push([x, 0, z]);
+  }
+}
+for (const x of intersections) {
+  for (const z of blockCenters) {
+    LOCATIONS.push([x, 0, z]);
+  }
+}
+
+export const globalCarPosition = { x: 0, y: 0, z: 0 };
+
+interface GameState {
+  status: 'intro' | 'playing';
+  score: number;
+  hasPackage: boolean;
+  targetLocation: [number, number, number];
+  settings: {
+    shadows: boolean;
+    postProcessing: boolean;
+    destructibles: boolean;
+    timeOfDay: 'twilight' | 'dusk';
+    debugPhysics: boolean;
+    devInfo: boolean;
+  };
+  startGame: () => void;
+  pickup: () => void;
+  dropoff: () => void;
+  updateSetting: (key: keyof GameState['settings'], value: any) => void;
+}
+
+const getRandomLocation = (current: [number, number, number]) => {
+  const available = LOCATIONS.filter(l => l[0] !== current[0] || l[2] !== current[2]);
+  return available[Math.floor(Math.random() * available.length)];
+};
+
+export const useGameStore = create<GameState>((set, get) => ({
+  status: 'intro',
+  score: 0,
+  hasPackage: false,
+  targetLocation: LOCATIONS[0],
+  settings: {
+    shadows: false,
+    postProcessing: false,
+    destructibles: false,
+    timeOfDay: 'twilight',
+    debugPhysics: false,
+    devInfo: false,
+  },
+  startGame: () => set({ status: 'playing' }),
+  pickup: () => {
+    if (!get().hasPackage) {
+      set({ hasPackage: true, targetLocation: getRandomLocation(get().targetLocation) });
+    }
+  },
+  dropoff: () => {
+    if (get().hasPackage) {
+      set(state => ({ score: state.score + 1, hasPackage: false, targetLocation: getRandomLocation(state.targetLocation) }));
+    }
+  },
+  updateSetting: (key, value) => set(state => ({ settings: { ...state.settings, [key]: value } })),
+}));

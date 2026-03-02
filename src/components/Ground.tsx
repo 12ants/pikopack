@@ -11,11 +11,16 @@ export function Ground() {
 
   return (
     <group>
-      <mesh ref={ref} receiveShadow>
-        <planeGeometry args={[1000, 1000]} />
-        <meshStandardMaterial color="#0a0a0a" />
+      {/* Invisible collision plane */}
+      <mesh ref={ref} visible={false}>
+        <planeGeometry args={[2000, 2000]} />
       </mesh>
-      <gridHelper args={[1000, 100, '#333', '#222']} position={[0, 0.01, 0]} />
+      
+      {/* Outer Grass Plane */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
+        <planeGeometry args={[2000, 2000]} />
+        <meshStandardMaterial color="#2d4c3b" roughness={1} metalness={0} />
+      </mesh>
     </group>
   );
 }

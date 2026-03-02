@@ -8,6 +8,7 @@ export function useControls() {
     right: false,
     brake: false,
     reset: false,
+    lights: false,
     cameraMode: 0, // 0: Chase, 1: Far, 2: Top, 3: FPS
   });
 
@@ -35,6 +36,11 @@ export function useControls() {
           break;
         case 'r':
           setControls((c) => ({ ...c, reset: true }));
+          break;
+        case 'l':
+          if (!e.repeat) {
+            setControls((c) => ({ ...c, lights: !c.lights }));
+          }
           break;
         case 'c':
           if (!e.repeat) {
