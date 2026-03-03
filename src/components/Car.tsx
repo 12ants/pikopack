@@ -35,7 +35,7 @@ export function Car({ position = [0, 2, 0] }: { position?: [number, number, numb
   const chassisWidth = 1.7;
   const chassisHeight = 0.7;
   const chassisLength = 4.4;
-  const wheelRadius = 0.35;
+  const wheelRadius = 0.5;
   const wheelWidth = 0.25;
 
   const chassisRef = useRef<THREE.Group>(null);
@@ -89,6 +89,7 @@ export function Car({ position = [0, 2, 0] }: { position?: [number, number, numb
 
   const controls = useKeyboard();
   const { cameraMode, lights } = controls;
+  const settings = useGameStore(s => s.settings);
 
   useFrame(() => {
     const { forward, backward, left, right, brake, reset } = controls;
@@ -184,10 +185,14 @@ export function Car({ position = [0, 2, 0] }: { position?: [number, number, numb
     <group ref={vehicle}>
       <group ref={chassisRef}>
         {/* Mount the camera directly to the car chassis */}
-        {cameraMode === 0 && <PerspectiveCamera makeDefault position={[0, 6, 15]} rotation={[-0.2, 0, 0]} />}
-        {cameraMode === 1 && <PerspectiveCamera makeDefault position={[0, 8, 18]} rotation={[-0.3, 0, 0]} />}
-        {cameraMode === 2 && <PerspectiveCamera makeDefault position={[0, 25, 0]} rotation={[-Math.PI / 2, 0, 0]} />}
-        {cameraMode === 3 && <PerspectiveCamera makeDefault position={[0, 0.8, -0.5]} rotation={[0, 0, 0]} />}
+        {!settings.satelliteView && (
+          <>
+            {cameraMode === 0 && <PerspectiveCamera makeDefault position={[0, 6, 15]} rotation={[-0.2, 0, 0]} />}
+            {cameraMode === 1 && <PerspectiveCamera makeDefault position={[0, 8, 18]} rotation={[-0.3, 0, 0]} />}
+            {cameraMode === 2 && <PerspectiveCamera makeDefault position={[0, 25, 0]} rotation={[-Math.PI / 2, 0, 0]} />}
+            {cameraMode === 3 && <PerspectiveCamera makeDefault position={[0, 0.8, -0.5]} rotation={[0, 0, 0]} />}
+          </>
+        )}
 
         {/* Saab 900 Body Group - Rotated so Positive X (Front) points to Negative Z */}
         <group rotation={[0, Math.PI / 2, 0]} position={[0, 0.1, 0]}>
@@ -250,7 +255,7 @@ export function Car({ position = [0, 2, 0] }: { position?: [number, number, numb
                 position={[2.3, 0.05, -0.5]}
                 angle={0.5}
                 penumbra={0.5}
-                intensity={100}
+                intensity={500}
                 distance={50}
                 castShadow
                 target={headlightTarget}

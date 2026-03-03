@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useGameStore } from '../store';
 
 import { Chunk } from './Chunk';
+import { Bench, TrashCan, Bollard, FireHydrant } from './Props';
 
 function House({ position, size, color }: { position: [number, number, number], size: [number, number, number], color: string }) {
   const shadows = useGameStore(s => s.settings.shadows);
@@ -74,7 +75,7 @@ function StreetSign({ position, rotation }: { position: [number, number, number]
     mass: destructibles ? 20 : 0,
     position: [position[0], 1.5, position[2]],
     rotation,
-    args: [0.3, 3, 0.3],
+    args: [0.4, 4, 0.4],
     allowSleep: true,
   }), useRef<THREE.Group>(null));
 
@@ -156,11 +157,12 @@ function CityBlock({ position, size }: { position: [number, number, number], siz
     args: [size, elevation + 0.5, size]
   }), useRef<THREE.Mesh>(null));
 
-  const { houses, streetLights, signs, parkedCars } = useMemo(() => {
+  const { houses, streetLights, signs, parkedCars, props } = useMemo(() => {
     const h = [];
     const sl = [];
     const sg = [];
     const pc = [];
+    const pr = [];
     const colors = ['#f4a261', '#e76f51', '#2a9d8f', '#e9c46a', '#ffffff', '#a8dadc', '#457b9d', '#1d3557'];
     const carColors = ['#e63946', '#1d3557', '#457b9d', '#f1faee', '#2a9d8f', '#e9c46a'];
     
@@ -197,6 +199,43 @@ function CityBlock({ position, size }: { position: [number, number, number], siz
     sg.push({ pos: [position[0] - cornerOffset, elevation + 0.5, position[2] + cornerOffset] as [number, number, number], rot: [0, Math.PI*0.75, 0] as [number, number, number] });
     sg.push({ pos: [position[0] + cornerOffset, elevation + 0.5, position[2] - cornerOffset] as [number, number, number], rot: [0, -Math.PI/4, 0] as [number, number, number] });
 
+    // Props (Benches, Trash Cans, Bollards)
+    const sideLength = size - 10;
+    const step = 8;
+    
+    const addPropsLine = (startX: number, startZ: number, dx: number, dz: number, rot: [number, number, number]) => {
+      for (let i = -sideLength/2; i <= sideLength/2; i += step) {
+        if (Math.random() > 0.6) {
+           const type = Math.random();
+           const px = startX + (dx * i);
+           const pz = startZ + (dz * i);
+           // Add some jitter
+           const jx = (Math.random() - 0.5) * 0.5;
+           const jz = (Math.random() - 0.5) * 0.5;
+           
+           if (type < 0.3) {
+             pr.push({ type: 'bench', pos: [px + jx, elevation + 0.5, pz + jz] as [number, number, number], rot });
+           } else if (type < 0.5) {
+             pr.push({ type: 'trash', pos: [px + jx, elevation + 0.5, pz + jz] as [number, number, number], rot });
+           } else if (type < 0.6) {
+             pr.push({ type: 'bollard', pos: [px + jx, elevation + 0.5, pz + jz] as [number, number, number], rot });
+           } else if (type < 0.65) {
+             pr.push({ type: 'hydrant', pos: [px + jx, elevation + 0.5, pz + jz] as [number, number, number], rot });
+           }
+        }
+      }
+    };
+
+    // North side (Z negative) - Face Road (North/ -Z) -> Rot PI
+    addPropsLine(position[0], position[2] - edgeOffset, 1, 0, [0, Math.PI, 0]);
+    // South side (Z positive) - Face Road (South/ +Z) -> Rot 0
+    addPropsLine(position[0], position[2] + edgeOffset, 1, 0, [0, 0, 0]);
+    // East side (X positive) - Face Road (East/ +X) -> Rot -PI/2
+    addPropsLine(position[0] + edgeOffset, position[2], 0, 1, [0, -Math.PI/2, 0]);
+    // West side (X negative) - Face Road (West/ -X) -> Rot PI/2
+    addPropsLine(position[0] - edgeOffset, position[2], 0, 1, [0, Math.PI/2, 0]);
+
+
     // Parked Cars (On the road, outside the block)
     const roadOffset = size / 2 + 2;
     if (Math.random() > 0.2) pc.push({ pos: [position[0] + (Math.random() * 20 - 10), 0, position[2] + roadOffset] as [number, number, number], rot: [0, Math.PI/2, 0] as [number, number, number], color: carColors[Math.floor(Math.random() * carColors.length)] });
@@ -204,7 +243,7 @@ function CityBlock({ position, size }: { position: [number, number, number], siz
     if (Math.random() > 0.2) pc.push({ pos: [position[0] + roadOffset, 0, position[2] + (Math.random() * 20 - 10)] as [number, number, number], rot: [0, 0, 0] as [number, number, number], color: carColors[Math.floor(Math.random() * carColors.length)] });
     if (Math.random() > 0.2) pc.push({ pos: [position[0] - roadOffset, 0, position[2] + (Math.random() * 20 - 10)] as [number, number, number], rot: [0, 0, 0] as [number, number, number], color: carColors[Math.floor(Math.random() * carColors.length)] });
 
-    return { houses: h, streetLights: sl, signs: sg, parkedCars: pc };
+    return { houses: h, streetLights: sl, signs: sg, parkedCars: pc, props: pr };
   }, [position, size, elevation]);
 
   return (
@@ -233,6 +272,13 @@ function CityBlock({ position, size }: { position: [number, number, number], siz
       {streetLights.map((l, i) => <StreetLight key={`light-${i}`} position={l.pos} rotation={l.rot} />)}
       {signs.map((s, i) => <StreetSign key={`sign-${i}`} position={s.pos} rotation={s.rot} />)}
       {parkedCars.map((c, i) => <ParkedCar key={`car-${i}`} position={c.pos} rotation={c.rot} color={c.color} />)}
+      {props.map((p, i) => {
+        if (p.type === 'bench') return <Bench key={`prop-${i}`} position={p.pos} rotation={p.rot} />;
+        if (p.type === 'trash') return <TrashCan key={`prop-${i}`} position={p.pos} />;
+        if (p.type === 'bollard') return <Bollard key={`prop-${i}`} position={p.pos} />;
+        if (p.type === 'hydrant') return <FireHydrant key={`prop-${i}`} position={p.pos} />;
+        return null;
+      })}
     </group>
   );
 }
@@ -246,12 +292,35 @@ function CentralPark({ position, size }: { position: [number, number, number], s
     args: [size, elevation + 0.5, size]
   }), useRef<THREE.Mesh>(null));
 
-  const crates = useMemo(() => {
+  const { crates, benches } = useMemo(() => {
     const c = [];
+    const b = [];
     for(let i=0; i<15; i++) {
       c.push([position[0] + (Math.random() * 20 - 10), elevation + 2, position[2] + (Math.random() * 20 - 10)] as [number, number, number]);
     }
-    return c;
+    
+    // Add benches along the paths
+    const pathLength = size - 10;
+    const step = 10;
+    for (let i = -pathLength/2; i <= pathLength/2; i += step) {
+      // Z-aligned path (X constant)
+      if (Math.random() > 0.5) {
+        b.push({ pos: [position[0] - 3, elevation + 0.5, position[2] + i] as [number, number, number], rot: [0, Math.PI/2, 0] as [number, number, number] });
+      }
+      if (Math.random() > 0.5) {
+        b.push({ pos: [position[0] + 3, elevation + 0.5, position[2] + i] as [number, number, number], rot: [0, -Math.PI/2, 0] as [number, number, number] });
+      }
+      
+      // X-aligned path (Z constant)
+      if (Math.random() > 0.5) {
+        b.push({ pos: [position[0] + i, elevation + 0.5, position[2] - 3] as [number, number, number], rot: [0, 0, 0] as [number, number, number] });
+      }
+      if (Math.random() > 0.5) {
+        b.push({ pos: [position[0] + i, elevation + 0.5, position[2] + 3] as [number, number, number], rot: [0, Math.PI, 0] as [number, number, number] });
+      }
+    }
+    
+    return { crates: c, benches: b };
   }, [position, elevation]);
 
   return (
@@ -291,6 +360,7 @@ function CentralPark({ position, size }: { position: [number, number, number], s
 
       {/* Crates */}
       {crates.map((pos, i) => <Crate key={i} position={pos} />)}
+      {benches.map((b, i) => <Bench key={`bench-${i}`} position={b.pos} rotation={b.rot} />)}
     </group>
   );
 }

@@ -37,6 +37,9 @@ interface GameState {
     timeOfDay: 'twilight' | 'dusk';
     debugPhysics: boolean;
     devInfo: boolean;
+    traffic: boolean;
+    weather: boolean;
+    satelliteView: boolean;
   };
   startGame: () => void;
   pickup: () => void;
@@ -55,12 +58,15 @@ export const useGameStore = create<GameState>((set, get) => ({
   hasPackage: false,
   targetLocation: LOCATIONS[0],
   settings: {
-    shadows: false,
-    postProcessing: false,
-    destructibles: false,
+    shadows: true,
+    postProcessing: true,
+    destructibles: true,
     timeOfDay: 'twilight',
     debugPhysics: false,
     devInfo: false,
+    traffic: false,
+    weather: false,
+    satelliteView: false,
   },
   startGame: () => set({ status: 'playing' }),
   pickup: () => {

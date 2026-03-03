@@ -1,5 +1,5 @@
 import { useGameStore } from '../store';
-import { FenceRow, Bench } from './Props';
+import { FenceRow, Bench, TrashCan, Bollard } from './Props';
 
 export function EnvironmentDetails() {
   const shadows = useGameStore(s => s.settings.shadows);
@@ -38,7 +38,7 @@ function StreetLamp({ position }: { position: [number, number, number] }) {
     <group position={position}>
       {/* Pole */}
       <mesh position={[0, 4, 0]} castShadow={shadows}>
-        <cylinderGeometry args={[0.15, 0.2, 8]} />
+        <cylinderGeometry args={[0.5, 0.2, 8]} />
         <meshStandardMaterial color="#222222" />
       </mesh>
       {/* Arm */}
@@ -54,41 +54,9 @@ function StreetLamp({ position }: { position: [number, number, number] }) {
       {/* Light Source */}
       <mesh position={[1, 7.45, 0]}>
         <boxGeometry args={[0.4, 0.1, 0.3]} />
-        <meshStandardMaterial color="#ffffaa" emissive="#ffffaa" emissiveIntensity={2} />
+        <meshStandardMaterial color="#ffffaa" emissive="#ffffaa" emissiveIntensity={5} />
       </mesh>
-      <pointLight position={[1, 7, 0]} intensity={20} distance={15} color="#ffffaa" />
-    </group>
-  );
-}
-
-function TrashCan({ position }: { position: [number, number, number] }) {
-  const shadows = useGameStore(s => s.settings.shadows);
-  return (
-    <group position={position}>
-      <mesh position={[0, 0.6, 0]} castShadow={shadows}>
-        <cylinderGeometry args={[0.4, 0.35, 1.2, 12]} />
-        <meshStandardMaterial color="#224422" roughness={0.8} />
-      </mesh>
-      <mesh position={[0, 1.25, 0]} castShadow={shadows}>
-        <cylinderGeometry args={[0.45, 0.4, 0.1, 12]} />
-        <meshStandardMaterial color="#112211" />
-      </mesh>
-    </group>
-  );
-}
-
-function Bollard({ position }: { position: [number, number, number] }) {
-  const shadows = useGameStore(s => s.settings.shadows);
-  return (
-    <group position={position}>
-      <mesh position={[0, 0.5, 0]} castShadow={shadows}>
-        <cylinderGeometry args={[0.15, 0.15, 1, 8]} />
-        <meshStandardMaterial color="#444444" />
-      </mesh>
-      <mesh position={[0, 1, 0]} castShadow={shadows}>
-        <sphereGeometry args={[0.15, 8, 8]} />
-        <meshStandardMaterial color="#444444" />
-      </mesh>
+      <pointLight position={[1, 7, 0]} intensity={120} distance={15} color="#ffffaa" />
     </group>
   );
 }

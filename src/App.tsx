@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { Physics, Debug } from '@react-three/cannon';
 import * as THREE from 'three';
 import { Car } from './components/Car';
@@ -19,11 +19,13 @@ import { EnvironmentDetails } from './components/EnvironmentDetails';
 import { HUD } from './components/HUD';
 import { Settings } from './components/Settings';
 import { StartingArea } from './components/StartingArea';
+import { Traffic } from './components/Traffic';
+import { Weather } from './components/Weather';
 import { Leva } from 'leva';
-import { Sky, Environment, Stats } from '@react-three/drei';
+import { Sky, Environment, PerspectiveCamera } from '@react-three/drei';
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
-import { useGameStore } from './store';
-import { useState, useEffect } from 'react';
+import { useGameStore, globalCarPosition } from './store';
+import { useState, useEffect, useRef } from 'react';
 
 export default function App() {
   const settings = useGameStore(s => s.settings);
@@ -54,28 +56,28 @@ export default function App() {
           </div>
 
           <Canvas 
-            gl={{ antialias: false, alpha: false, preserveDrawingBuffer: true, powerPreference: "default", failIfMajorPerformanceCaveat: false }}
+            gl={{ antialias: false, alpha: false, powerPreference: "default", failIfMajorPerformanceCaveat: false }}
             shadows={settings.shadows} 
-            camera={{ position: [0, 5, 15], fov: 50 }} 
+            camera={{ position: [0, 5, 15], fov: 20 }} 
             dpr={1} 
             performance={{ min: 0.5 }}
           >
         <color attach="background" args={[settings.timeOfDay === 'twilight' ? '#ff9e79' : '#1a1a2e']} />
         
         <Sky 
-          sunPosition={settings.timeOfDay === 'twilight' ? [100, 5, 100] : [100, -5, 100]} 
-          turbidity={settings.timeOfDay === 'twilight' ? 10 : 5} 
-          rayleigh={settings.timeOfDay === 'twilight' ? 3 : 1} 
+          sunPosition={settings.timeOfDay === 'twilight' ? [160, 5, 200] : [100, -5, 100]} 
+          turbidity={settings.timeOfDay === 'twilight' ? 110 : 5} 
+          rayleigh={settings.timeOfDay === 'twilight' ? 4 : 1} 
         />
         <Environment preset={settings.timeOfDay === 'twilight' ? "sunset" : "night"} />
         
-        <ambientLight intensity={settings.timeOfDay === 'twilight' ? 0.4 : 0.15} />
+        <ambientLight intensity={settings.timeOfDay === 'twilight' ? 0.02 : 0.01} />
         
         {settings.timeOfDay === 'twilight' && settings.shadows && (
           <directionalLight
             castShadow
-            position={[100, 100, 50]}
-            intensity={1.5}
+            position={[40, 60, 150]}
+            intensity={1}
             shadow-mapSize={[1024, 1024]}
             shadow-camera-left={-150}
             shadow-camera-right={150}
@@ -84,9 +86,9 @@ export default function App() {
           />
         )}
         
-        <Physics broadphase="SAP" gravity={[0, -9.81, 0]}>
+        <Physics broadphase="SAP" gravity={[0, -9, 0]}>
           {settings.debugPhysics ? (
-            <Debug color="black" scale={1.1}>
+            <Debug color="black" scale={1}>
               <Scene />
             </Debug>
           ) : (
@@ -101,7 +103,7 @@ export default function App() {
           </EffectComposer>
         )}
 
-          {settings.devInfo && <Stats />}
+          {/* Stats removed to prevent InvalidStateError: CanvasRenderingContext2D.drawImage: Passed-in canvas is empty */}
         </Canvas>
         </>
       )}
@@ -114,7 +116,7 @@ function Scene() {
 
   return (
     <>
-      <Car position={[200, 52, 200]} />
+      <Car position={[142, 2, 42]} />
       <Ground />
       <City key={`city-${settings.destructibles}`} />
       <Trees key={`trees-${settings.destructibles}`} />
@@ -122,6 +124,22 @@ function Scene() {
       <EnvironmentDetails />
       <DeliveryZones />
       <DeliveryZone />
+      {settings.traffic && <Traffic />}
+      {settings.weather && <Weather />}
+      {settings.satelliteView && <SatelliteCamera />}
     </>
   );
+}
+
+function SatelliteCamera() {
+  const cameraRef = useRef<THREE.PerspectiveCamera>(null!);
+  
+  useFrame(() => {
+    if (cameraRef.current) {
+      cameraRef.current.position.set(globalCarPosition.x, 150, globalCarPosition.z);
+      cameraRef.current.lookAt(globalCarPosition.x, 0, globalCarPosition.z);
+    }
+  });
+
+  return <PerspectiveCamera ref={cameraRef} makeDefault fov={50} position={[0, 150, 0]} />;
 }

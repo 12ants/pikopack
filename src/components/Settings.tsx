@@ -62,6 +62,27 @@ export function Settings() {
             <span className="text-white/70 group-hover:text-white transition-colors uppercase text-xs tracking-wider">Dev Info</span>
             <input type="checkbox" checked={settings.devInfo} onChange={e => updateSetting('devInfo', e.target.checked)} className="w-4 h-4 appearance-none border border-white/50 checked:bg-white checked:border-white transition-colors" />
           </label>
+
+          <div className="border-t border-white/20 pt-4 mt-4">
+            <h3 className="text-white/50 text-xs uppercase tracking-widest mb-4">Map Layers</h3>
+            
+            <div className="space-y-4">
+              <label className="flex items-center justify-between cursor-pointer group">
+                <span className="text-white/70 group-hover:text-white transition-colors uppercase text-xs tracking-wider">Traffic</span>
+                <input type="checkbox" checked={settings.traffic} onChange={e => updateSetting('traffic', e.target.checked)} className="w-4 h-4 appearance-none border border-white/50 checked:bg-white checked:border-white transition-colors" />
+              </label>
+
+              <label className="flex items-center justify-between cursor-pointer group">
+                <span className="text-white/70 group-hover:text-white transition-colors uppercase text-xs tracking-wider">Weather</span>
+                <input type="checkbox" checked={settings.weather} onChange={e => updateSetting('weather', e.target.checked)} className="w-4 h-4 appearance-none border border-white/50 checked:bg-white checked:border-white transition-colors" />
+              </label>
+
+              <label className="flex items-center justify-between cursor-pointer group">
+                <span className="text-white/70 group-hover:text-white transition-colors uppercase text-xs tracking-wider">Satellite View</span>
+                <input type="checkbox" checked={settings.satelliteView} onChange={e => updateSetting('satelliteView', e.target.checked)} className="w-4 h-4 appearance-none border border-white/50 checked:bg-white checked:border-white transition-colors" />
+              </label>
+            </div>
+          </div>
         </div>
       </div>
     </div>
