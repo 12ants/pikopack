@@ -2,25 +2,36 @@ import { useGameStore, LOCATIONS, globalCarPosition } from '../store';
 import { useState, useEffect, useRef } from 'react';
 
 export function HUD() {
-  const { score, hasPackage, targetLocation } = useGameStore();
+  const { score, hasPackage, targetLocation, playerState } = useGameStore();
 
   return (
-    <div className="absolute top-0 left-0 w-full p-6 pointer-events-none z-10 flex justify-between items-start font-mono text-white uppercase tracking-widest">
-      <div className="flex flex-col gap-2">
-        <div className="bg-black/80 border border-white/30 px-4 py-2 backdrop-blur-sm">
-          <span className="text-white/50 text-xs mr-2">STATUS</span>
-          <span className={hasPackage ? "text-white" : "text-white/80"}>
-            {hasPackage ? "DELIVERING" : "AWAITING PICKUP"}
-          </span>
+    <>
+      <div className="absolute top-0 left-0 w-full p-6 pointer-events-none z-10 flex justify-between items-start font-mono text-white uppercase tracking-widest">
+        <div className="flex flex-col gap-2">
+          <div className="bg-black/80 border border-white/30 px-4 py-2 backdrop-blur-sm">
+            <span className="text-white/50 text-xs mr-2">STATUS</span>
+            <span className={hasPackage ? "text-white" : "text-white/80"}>
+              {hasPackage ? "DELIVERING" : "AWAITING PICKUP"}
+            </span>
+          </div>
+          <div className="bg-black/80 border border-white/30 px-4 py-2 backdrop-blur-sm">
+            <span className="text-white/50 text-xs mr-2">DELIVERIES</span>
+            <span className="text-xl font-bold">{score}</span>
+          </div>
         </div>
-        <div className="bg-black/80 border border-white/30 px-4 py-2 backdrop-blur-sm">
-          <span className="text-white/50 text-xs mr-2">DELIVERIES</span>
-          <span className="text-xl font-bold">{score}</span>
-        </div>
-      </div>
 
-      <Minimap targetLocation={targetLocation} hasPackage={hasPackage} />
-    </div>
+        <Minimap targetLocation={targetLocation} hasPackage={hasPackage} />
+      </div>
+      
+      {playerState === 'walking' && (
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
+          <div className="w-1 h-1 bg-white rounded-full opacity-50"></div>
+          <div className="absolute top-1/2 mt-4 text-white/50 text-xs uppercase tracking-widest bg-black/50 px-2 py-1 rounded">
+            Click to look around
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

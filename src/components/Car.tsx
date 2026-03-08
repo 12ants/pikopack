@@ -21,26 +21,30 @@ export function Car({ position = [0, 2, 0] }: { position?: [number, number, numb
     rollInfluence,
   } = useLeva('Car Physics', {
     mass: { value: 1500, min: 500, max: 3000 },
-    engineForce: { value: 2000, min: 500, max: 5000 },
-    maxBrake: { value: 50, min: 10, max: 100 },
-    steeringValue: { value: 0.5, min: 0.1, max: 1 },
-    suspensionStiffness: { value: 30, min: 10, max: 100 },
+    engineForce: { value: 4500, min: 500, max: 10000 },
+    maxBrake: { value: 120, min: 10, max: 200 },
+    steeringValue: { value: 0.4, min: 0.1, max: 1 },
+    suspensionStiffness: { value: 45, min: 10, max: 100 },
     suspensionRestLength: { value: 0.3, min: 0.1, max: 1 },
-    frictionSlip: { value: 1.5, min: 0.1, max: 5 },
-    dampingRelaxation: { value: 2.3, min: 0.1, max: 5 },
-    dampingCompression: { value: 4.4, min: 0.1, max: 10 },
+    frictionSlip: { value: 6, min: 0.1, max: 10 },
+    dampingRelaxation: { value: 4.5, min: 0.1, max: 10 },
+    dampingCompression: { value: 6.5, min: 0.1, max: 10 },
     rollInfluence: { value: 0.01, min: 0, max: 1 },
   });
 
+  const vehicleType = useGameStore(s => s.vehicleType);
   const chassisWidth = 1.7;
-  const chassisHeight = 0.7;
+  const chassisHeight = vehicleType === 'truck' ? 1.7 : vehicleType === 'van' ? 1.4 : 0.7;
   const chassisLength = 4.4;
   const wheelRadius = 0.5;
   const wheelWidth = 0.25;
 
+  const massMultiplier = vehicleType === 'truck' ? 2 : vehicleType === 'van' ? 1.5 : 1;
+  const engineMultiplier = vehicleType === 'truck' ? 1.5 : vehicleType === 'van' ? 1.2 : 1;
+
   const chassisRef = useRef<THREE.Group>(null);
   const [chassisBody, chassisApi] = useBox(() => ({
-    mass,
+    mass: mass * massMultiplier,
     position,
     args: [chassisWidth, chassisHeight, chassisLength],
     allowSleep: false,
@@ -54,11 +58,12 @@ export function Car({ position = [0, 2, 0] }: { position?: [number, number, numb
     useRef<THREE.Group>(null),
   ];
 
+  const wheelY = -chassisHeight / 2 + 0.2;
   const wheelPositions: [number, number, number][] = [
-    [-chassisWidth / 2 - 0.1, -0.15, -chassisLength / 2 + 0.7], // Front Left
-    [chassisWidth / 2 + 0.1, -0.15, -chassisLength / 2 + 0.7],  // Front Right
-    [-chassisWidth / 2 - 0.1, -0.15, chassisLength / 2 - 0.6], // Rear Left
-    [chassisWidth / 2 + 0.1, -0.15, chassisLength / 2 - 0.6],  // Rear Right
+    [-chassisWidth / 2 - 0.1, wheelY, -chassisLength / 2 + 0.7], // Front Left
+    [chassisWidth / 2 + 0.1, wheelY, -chassisLength / 2 + 0.7],  // Front Right
+    [-chassisWidth / 2 - 0.1, wheelY, chassisLength / 2 - 0.6], // Rear Left
+    [chassisWidth / 2 + 0.1, wheelY, chassisLength / 2 - 0.6],  // Rear Right
   ];
 
   const wheelInfos = wheelPositions.map((pos, index) => ({
@@ -90,18 +95,43 @@ export function Car({ position = [0, 2, 0] }: { position?: [number, number, numb
   const controls = useKeyboard();
   const { cameraMode, lights } = controls;
   const settings = useGameStore(s => s.settings);
+  const playerState = useGameStore(s => s.playerState);
+  const lastInteract = useRef(false);
 
   useFrame(() => {
-    const { forward, backward, left, right, brake, reset } = controls;
+    const { forward, backward, left, right, brake, reset, interact } = controls;
+    
+    if (interact && !lastInteract.current && playerState === 'driving') {
+      const pos = chassisRef.current?.position;
+      if (pos) {
+        useGameStore.getState().setPlayerPosition([pos.x + 2, pos.y + 1, pos.z]);
+        useGameStore.getState().setPlayerState('walking');
+      }
+    }
+    lastInteract.current = interact;
+
+    if (playerState !== 'driving') {
+      vehicleApi.setBrake(maxBrake, 0);
+      vehicleApi.setBrake(maxBrake, 1);
+      vehicleApi.setBrake(maxBrake, 2);
+      vehicleApi.setBrake(maxBrake, 3);
+      vehicleApi.applyEngineForce(0, 0);
+      vehicleApi.applyEngineForce(0, 1);
+      vehicleApi.applyEngineForce(0, 2);
+      vehicleApi.applyEngineForce(0, 3);
+      return;
+    }
 
     if (reset) {
       chassisApi.position.set(200, 52, 200);
-      chassisApi.velocity.set(0, 0, 0);
-      chassisApi.angularVelocity.set(0, 0, 0);
+      chassisApi.velocity?.set(0, 0, 0);
+      chassisApi.angularVelocity?.set(0, 0, 0);
       chassisApi.rotation.set(0, 0, 0);
     }
 
-    const force = forward ? engineForce : backward ? -engineForce : 0;
+    const force = forward ? engineForce * engineMultiplier : backward ? -engineForce * engineMultiplier : 0;
+    vehicleApi.applyEngineForce(force, 0);
+    vehicleApi.applyEngineForce(force, 1);
     vehicleApi.applyEngineForce(force, 2);
     vehicleApi.applyEngineForce(force, 3);
 
@@ -129,51 +159,100 @@ export function Car({ position = [0, 2, 0] }: { position?: [number, number, numb
     }
   });
 
-  // Saab 900 Geometries
+  // Vehicle Geometries
   const { bodyGeom, frontRearWindowGeom, sideWindowGeom } = useMemo(() => {
     const extrudeSettings = { depth: chassisWidth, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: 0.05, bevelThickness: 0.05 };
     
-    // Main Body Profile (Positive X is Front)
     const bodyShape = new THREE.Shape();
-    bodyShape.moveTo(-2.2, -0.2); // Rear bottom
-    bodyShape.lineTo(-2.2, 0.0); // Rear bumper top
-    bodyShape.lineTo(-2.1, 0.1); // Rear lip
-    bodyShape.lineTo(-1.8, 0.15); // Base of fastback
-    bodyShape.lineTo(-0.6, 0.5); // Rear of roof
-    bodyShape.lineTo(0.2, 0.5); // Top of windshield
-    bodyShape.lineTo(0.8, 0.15); // Base of windshield
-    bodyShape.lineTo(2.1, 0.1); // Hood nose
-    bodyShape.lineTo(2.2, 0.0); // Front bumper top
-    bodyShape.lineTo(2.2, -0.2); // Front bottom
-    bodyShape.lineTo(-2.2, -0.2); // Back to rear bottom
+    const frWindowShape = new THREE.Shape();
+    const sideWindowShape = new THREE.Shape();
+
+    if (vehicleType === 'car') {
+      // Main Body Profile (Positive X is Front)
+      bodyShape.moveTo(-2.2, -0.2); // Rear bottom
+      bodyShape.lineTo(-2.2, 0.0); // Rear bumper top
+      bodyShape.lineTo(-2.1, 0.1); // Rear lip
+      bodyShape.lineTo(-1.8, 0.15); // Base of fastback
+      bodyShape.lineTo(-0.6, 0.5); // Rear of roof
+      bodyShape.lineTo(0.2, 0.5); // Top of windshield
+      bodyShape.lineTo(0.8, 0.15); // Base of windshield
+      bodyShape.lineTo(2.1, 0.1); // Hood nose
+      bodyShape.lineTo(2.2, 0.0); // Front bumper top
+      bodyShape.lineTo(2.2, -0.2); // Front bottom
+      bodyShape.lineTo(-2.2, -0.2); // Back to rear bottom
+
+      // Front/Rear Windows
+      frWindowShape.moveTo(-1.85, 0.15); 
+      frWindowShape.lineTo(-0.55, 0.52); 
+      frWindowShape.lineTo(0.15, 0.52); 
+      frWindowShape.lineTo(0.9, 0.15); 
+      frWindowShape.lineTo(-1.85, 0.15);
+      
+      // Side Windows
+      sideWindowShape.moveTo(-1.6, 0.18);
+      sideWindowShape.lineTo(-0.5, 0.45);
+      sideWindowShape.lineTo(0.1, 0.45);
+      sideWindowShape.lineTo(0.7, 0.18);
+      sideWindowShape.lineTo(-1.6, 0.18);
+    } else if (vehicleType === 'van') {
+      // Van Profile
+      bodyShape.moveTo(-2.2, -0.2);
+      bodyShape.lineTo(-2.2, 1.2); // Flat back
+      bodyShape.lineTo(0.5, 1.2); // Flat roof
+      bodyShape.lineTo(1.2, 0.4); // Windshield slope
+      bodyShape.lineTo(2.2, 0.2); // Hood
+      bodyShape.lineTo(2.2, -0.2);
+      bodyShape.lineTo(-2.2, -0.2);
+
+      frWindowShape.moveTo(0.55, 1.15);
+      frWindowShape.lineTo(1.15, 0.45);
+      frWindowShape.lineTo(1.2, 0.45);
+      frWindowShape.lineTo(0.6, 1.15);
+      frWindowShape.lineTo(0.55, 1.15);
+
+      sideWindowShape.moveTo(-2.0, 0.4);
+      sideWindowShape.lineTo(-2.0, 1.0);
+      sideWindowShape.lineTo(0.4, 1.0);
+      sideWindowShape.lineTo(1.0, 0.4);
+      sideWindowShape.lineTo(-2.0, 0.4);
+    } else if (vehicleType === 'truck') {
+      // Truck Profile
+      bodyShape.moveTo(-2.2, -0.2);
+      bodyShape.lineTo(-2.2, 1.5); // Box back
+      bodyShape.lineTo(0.0, 1.5); // Box roof
+      bodyShape.lineTo(0.0, 0.0); // Box front
+      bodyShape.lineTo(0.2, 0.0); // Cab gap
+      bodyShape.lineTo(0.2, 1.0); // Cab back
+      bodyShape.lineTo(1.0, 1.0); // Cab roof
+      bodyShape.lineTo(1.5, 0.4); // Windshield
+      bodyShape.lineTo(2.2, 0.4); // Hood
+      bodyShape.lineTo(2.2, -0.2);
+      bodyShape.lineTo(-2.2, -0.2);
+
+      frWindowShape.moveTo(1.05, 0.95);
+      frWindowShape.lineTo(1.45, 0.45);
+      frWindowShape.lineTo(1.5, 0.45);
+      frWindowShape.lineTo(1.1, 0.95);
+      frWindowShape.lineTo(1.05, 0.95);
+
+      sideWindowShape.moveTo(0.3, 0.4);
+      sideWindowShape.lineTo(0.3, 0.9);
+      sideWindowShape.lineTo(0.9, 0.9);
+      sideWindowShape.lineTo(1.4, 0.4);
+      sideWindowShape.lineTo(0.3, 0.4);
+    }
 
     const bGeom = new THREE.ExtrudeGeometry(bodyShape, extrudeSettings);
     bGeom.center();
 
-    // Front/Rear Windows (Pokes through the front and rear slopes)
-    const frWindowShape = new THREE.Shape();
-    frWindowShape.moveTo(-1.85, 0.15); 
-    frWindowShape.lineTo(-0.55, 0.52); 
-    frWindowShape.lineTo(0.15, 0.52); 
-    frWindowShape.lineTo(0.9, 0.15); 
-    frWindowShape.lineTo(-1.85, 0.15);
-    
     const frGeom = new THREE.ExtrudeGeometry(frWindowShape, { ...extrudeSettings, depth: chassisWidth - 0.1, bevelEnabled: false });
     frGeom.center();
-
-    // Side Windows (Pokes through the sides)
-    const sideWindowShape = new THREE.Shape();
-    sideWindowShape.moveTo(-1.6, 0.18);
-    sideWindowShape.lineTo(-0.5, 0.45);
-    sideWindowShape.lineTo(0.1, 0.45);
-    sideWindowShape.lineTo(0.7, 0.18);
-    sideWindowShape.lineTo(-1.6, 0.18);
 
     const sideGeom = new THREE.ExtrudeGeometry(sideWindowShape, { ...extrudeSettings, depth: chassisWidth + 0.05, bevelEnabled: false });
     sideGeom.center();
 
     return { bodyGeom: bGeom, frontRearWindowGeom: frGeom, sideWindowGeom: sideGeom };
-  }, [chassisWidth]);
+  }, [chassisWidth, vehicleType]);
 
   const headlightTarget = useMemo(() => {
     const o = new THREE.Object3D();
@@ -185,7 +264,7 @@ export function Car({ position = [0, 2, 0] }: { position?: [number, number, numb
     <group ref={vehicle}>
       <group ref={chassisRef}>
         {/* Mount the camera directly to the car chassis */}
-        {!settings.satelliteView && (
+        {!settings.satelliteView && playerState === 'driving' && (
           <>
             {cameraMode === 0 && <PerspectiveCamera makeDefault position={[0, 6, 15]} rotation={[-0.2, 0, 0]} />}
             {cameraMode === 1 && <PerspectiveCamera makeDefault position={[0, 8, 18]} rotation={[-0.3, 0, 0]} />}
@@ -195,10 +274,14 @@ export function Car({ position = [0, 2, 0] }: { position?: [number, number, numb
         )}
 
         {/* Saab 900 Body Group - Rotated so Positive X (Front) points to Negative Z */}
-        <group rotation={[0, Math.PI / 2, 0]} position={[0, 0.1, 0]}>
+        <group rotation={[0, Math.PI / 2, 0]} position={[0, vehicleType === 'truck' ? -0.65 : vehicleType === 'van' ? -0.5 : -0.15, 0]}>
           {/* Main Silver Body */}
           <mesh geometry={bodyGeom} castShadow receiveShadow>
-            <meshStandardMaterial color="#88929b" roughness={0.3} metalness={0.7} />
+            <meshStandardMaterial 
+              color={vehicleType === 'truck' ? '#cc3333' : vehicleType === 'van' ? '#ffffff' : '#88929b'} 
+              roughness={0.3} 
+              metalness={0.7} 
+            />
           </mesh>
 
           {/* Front and Rear Windows */}

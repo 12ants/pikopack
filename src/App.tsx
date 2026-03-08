@@ -21,6 +21,7 @@ import { Settings } from './components/Settings';
 import { StartingArea } from './components/StartingArea';
 import { Traffic } from './components/Traffic';
 import { Weather } from './components/Weather';
+import { Player } from './components/Player';
 import { Leva } from 'leva';
 import { Sky, Environment, PerspectiveCamera } from '@react-three/drei';
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
@@ -49,6 +50,7 @@ export default function App() {
               <p><span className="text-white/50">A/←</span> STEER L</p>
               <p><span className="text-white/50">D/→</span> STEER R</p>
               <p><span className="text-white/50">SPACE</span> E-BRAKE</p>
+              <p><span className="text-white/50">F</span> ENTER/EXIT</p>
               <p><span className="text-white/50">R</span> RESET</p>
               <p><span className="text-white/50">L</span> LIGHTS</p>
               <p><span className="text-white/50">C</span> CAMERA</p>
@@ -117,6 +119,7 @@ function Scene() {
   return (
     <>
       <Car position={[142, 2, 42]} />
+      <Player />
       <Ground />
       <City key={`city-${settings.destructibles}`} />
       <Trees key={`trees-${settings.destructibles}`} />

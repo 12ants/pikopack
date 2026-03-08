@@ -30,6 +30,9 @@ interface GameState {
   score: number;
   hasPackage: boolean;
   targetLocation: [number, number, number];
+  playerState: 'driving' | 'walking';
+  vehicleType: 'car' | 'van' | 'truck';
+  playerPosition: [number, number, number];
   settings: {
     shadows: boolean;
     postProcessing: boolean;
@@ -45,6 +48,9 @@ interface GameState {
   pickup: () => void;
   dropoff: () => void;
   updateSetting: (key: keyof GameState['settings'], value: any) => void;
+  setPlayerState: (state: 'driving' | 'walking') => void;
+  setVehicleType: (type: 'car' | 'van' | 'truck') => void;
+  setPlayerPosition: (pos: [number, number, number]) => void;
 }
 
 const getRandomLocation = (current: [number, number, number]) => {
@@ -57,6 +63,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   score: 0,
   hasPackage: false,
   targetLocation: LOCATIONS[0],
+  playerState: 'driving',
+  vehicleType: 'car',
+  playerPosition: [0, 2, 0],
   settings: {
     shadows: true,
     postProcessing: true,
@@ -80,4 +89,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
   updateSetting: (key, value) => set(state => ({ settings: { ...state.settings, [key]: value } })),
+  setPlayerState: (state) => set({ playerState: state }),
+  setVehicleType: (type) => set({ vehicleType: type }),
+  setPlayerPosition: (pos) => set({ playerPosition: pos }),
 }));

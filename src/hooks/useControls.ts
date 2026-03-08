@@ -9,6 +9,7 @@ export function useControls() {
     brake: false,
     reset: false,
     lights: false,
+    interact: false,
     cameraMode: 0, // 0: Chase, 1: Far, 2: Top, 3: FPS
   });
 
@@ -36,6 +37,11 @@ export function useControls() {
           break;
         case 'r':
           setControls((c) => ({ ...c, reset: true }));
+          break;
+        case 'f':
+          if (!e.repeat) {
+            setControls((c) => ({ ...c, interact: true }));
+          }
           break;
         case 'l':
           if (!e.repeat) {
@@ -73,6 +79,9 @@ export function useControls() {
           break;
         case 'r':
           setControls((c) => ({ ...c, reset: false }));
+          break;
+        case 'f':
+          setControls((c) => ({ ...c, interact: false }));
           break;
       }
     };

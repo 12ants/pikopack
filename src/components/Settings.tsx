@@ -5,6 +5,8 @@ export function Settings() {
   const [isOpen, setIsOpen] = useState(false);
   const settings = useGameStore(s => s.settings);
   const updateSetting = useGameStore(s => s.updateSetting);
+  const vehicleType = useGameStore(s => s.vehicleType);
+  const setVehicleType = useGameStore(s => s.setVehicleType);
 
   if (!isOpen) {
     return (
@@ -26,6 +28,19 @@ export function Settings() {
         </div>
 
         <div className="space-y-6">
+          <label className="flex items-center justify-between cursor-pointer group">
+            <span className="text-white/70 group-hover:text-white transition-colors uppercase text-xs tracking-wider">Vehicle Type</span>
+            <select 
+              value={vehicleType} 
+              onChange={e => setVehicleType(e.target.value as 'car' | 'van' | 'truck')}
+              className="bg-black border border-white/50 rounded-none px-2 py-1 text-white outline-none focus:border-white transition-colors text-xs uppercase"
+            >
+              <option value="car">Car</option>
+              <option value="van">Van</option>
+              <option value="truck">Truck</option>
+            </select>
+          </label>
+
           <label className="flex items-center justify-between cursor-pointer group">
             <span className="text-white/70 group-hover:text-white transition-colors uppercase text-xs tracking-wider">Shadows</span>
             <input type="checkbox" checked={settings.shadows} onChange={e => updateSetting('shadows', e.target.checked)} className="w-4 h-4 appearance-none border border-white/50 checked:bg-white checked:border-white transition-colors" />
