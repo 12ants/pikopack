@@ -8,6 +8,7 @@ import { PerspectiveCamera } from '@react-three/drei';
 import { useGameStore, globalCarPosition, CAR_SPAWN_POSITION } from '../store';
 
 export function Car({ position = CAR_SPAWN_POSITION }: { position?: [number, number, number] }) {
+  const cameraTransitionDuration = 0.6;
   const {
     mass,
     engineForce,
@@ -98,11 +99,17 @@ export function Car({ position = CAR_SPAWN_POSITION }: { position?: [number, num
   const playerState = useGameStore(s => s.playerState);
   const setInteractPrompt = useGameStore(s => s.setInteractPrompt);
   const lastInteract = useRef(false);
+  const wasDriving = useRef(playerState === 'driving');
+  const cameraTransitionStart = useRef<number | null>(null);
 
   useFrame((state) => {
     const { forward, backward, left, right, brake, reset, interact } = controls;
     
     if (playerState === 'driving') {
+      if (!wasDriving.current) {
+        cameraTransitionStart.current = state.clock.elapsedTime;
+        wasDriving.current = true;
+      }
       setInteractPrompt('Press F to exit vehicle');
       
       // Camera logic for driving
@@ -144,11 +151,17 @@ export function Car({ position = CAR_SPAWN_POSITION }: { position?: [number, num
 
         // Smoothly interpolate the main camera (use higher lerp factor for tighter follow)
         // For FPS mode, we want it to be rigid
-        const lerpFactor = cameraMode === 3 ? 1 : 0.15;
+        const transitionElapsed = cameraTransitionStart.current === null ? cameraTransitionDuration : state.clock.elapsedTime - cameraTransitionStart.current;
+        const transitionAlpha = THREE.MathUtils.clamp(transitionElapsed / cameraTransitionDuration, 0, 1);
+        const normalLerpFactor = cameraMode === 3 ? 1 : 0.15;
+        const lerpFactor = cameraMode === 3
+          ? normalLerpFactor
+          : THREE.MathUtils.lerp(0.03, normalLerpFactor, transitionAlpha);
         state.camera.position.lerp(targetPos, lerpFactor);
         state.camera.quaternion.slerp(targetQuat, lerpFactor);
       }
     } else {
+      wasDriving.current = false;
       setInteractPrompt(null);
     }
   });

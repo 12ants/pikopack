@@ -108,6 +108,7 @@ function CharacterModel({ rotation, velocity, turnDir }: { rotation: number, vel
 }
 
 export function Player() {
+  const cameraTransitionDuration = 0.6;
   const playerState = useGameStore(s => s.playerState);
   const setPlayerState = useGameStore(s => s.setPlayerState);
   const playerPosition = useGameStore(s => s.playerPosition);
@@ -130,6 +131,8 @@ export function Player() {
   const lastInteract = useRef(false);
   const playerRotation = useRef(0);
   const lastPrompt = useRef<string | null>(null);
+  const wasWalking = useRef(playerState === 'walking');
+  const cameraTransitionStart = useRef<number | null>(null);
 
   const isMounted = useRef(false);
 
@@ -156,11 +159,17 @@ export function Player() {
 
   useFrame((state) => {
     if (playerState !== 'walking') {
+      wasWalking.current = false;
       // Keep player frozen while driving so they don't fall infinitely
       api.velocity?.set(0, 0, 0);
       api.angularVelocity?.set(0, 0, 0);
       velocity.current = [0, 0, 0];
       return;
+    }
+
+    if (!wasWalking.current) {
+      cameraTransitionStart.current = state.clock.elapsedTime;
+      wasWalking.current = true;
     }
 
     const { forward, backward, left, right, interact, brake: jump, sprint } = controls as any;
@@ -244,9 +253,13 @@ export function Player() {
         const targetRotation = new THREE.Quaternion().setFromRotationMatrix(
           new THREE.Matrix4().lookAt(targetPos, lookAtTarget, new THREE.Vector3(0, 1, 0))
         );
-        
-        state.camera.position.lerp(targetPos, 0.15);
-        state.camera.quaternion.slerp(targetRotation, 0.15);
+
+        const transitionElapsed = cameraTransitionStart.current === null ? cameraTransitionDuration : state.clock.elapsedTime - cameraTransitionStart.current;
+        const transitionAlpha = THREE.MathUtils.clamp(transitionElapsed / cameraTransitionDuration, 0, 1);
+        const lerpFactor = THREE.MathUtils.lerp(0.03, 0.15, transitionAlpha);
+
+        state.camera.position.lerp(targetPos, lerpFactor);
+        state.camera.quaternion.slerp(targetRotation, lerpFactor);
       }
       
       // Store turnDir for rendering
