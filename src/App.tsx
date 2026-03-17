@@ -24,8 +24,7 @@ import { Weather } from './components/Weather';
 import { Player } from './components/Player';
 import { Leva } from 'leva';
 import { Sky, Environment, PerspectiveCamera } from '@react-three/drei';
-import { Perf } from 'r3f-perf'
-import { EffectComposer, Bloom } from '@react-three/postprocessing';
+import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import { useGameStore, globalCarPosition } from './store';
 import { useState, useEffect, useRef } from 'react';
 
@@ -66,7 +65,7 @@ export default function App() {
             performance={{ min: 0.5 }}
           >
         <color attach="background" args={[settings.timeOfDay === 'twilight' ? '#ff9e79' : '#1a1a2e']} />
-              <Perf />
+        
         <Sky 
           sunPosition={settings.timeOfDay === 'twilight' ? [160, 5, 200] : [100, -5, 100]} 
           turbidity={settings.timeOfDay === 'twilight' ? 110 : 5} 
@@ -102,6 +101,7 @@ export default function App() {
         {settings.postProcessing && (
           <EffectComposer>
             <Bloom luminanceThreshold={1} mipmapBlur intensity={0.5} />
+            <Vignette eskil={false} offset={0.1} darkness={1.1} />
           </EffectComposer>
         )}
 
@@ -118,7 +118,7 @@ function Scene() {
 
   return (
     <>
-      <Car position={[0, 2, 0]} />
+      <Car position={[142, 2, 42]} />
       <Player />
       <Ground />
       <City key={`city-${settings.destructibles}`} />

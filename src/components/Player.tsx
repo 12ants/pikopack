@@ -28,7 +28,13 @@ export function Player() {
   const cameraRef = useRef<THREE.PerspectiveCamera>(null);
   const lastInteract = useRef(false);
 
+  const isMounted = useRef(false);
+
   useEffect(() => {
+    if (!isMounted.current) {
+      isMounted.current = true;
+      return;
+    }
     if (playerState === 'walking') {
       api.position.set(playerPosition[0], playerPosition[1], playerPosition[2]);
       api.velocity?.set(0, 0, 0);

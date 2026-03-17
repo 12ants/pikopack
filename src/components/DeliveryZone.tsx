@@ -23,7 +23,13 @@ export function DeliveryZone() {
     }
   }), useRef<THREE.Mesh>(null));
 
+  const isMounted = useRef(false);
+
   useEffect(() => {
+    if (!isMounted.current) {
+      isMounted.current = true;
+      return;
+    }
     api.position.set(targetLocation[0], 5, targetLocation[2]);
   }, [targetLocation, api.position]);
 
