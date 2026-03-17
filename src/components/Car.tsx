@@ -1,4 +1,4 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useBox, useSphere, useRaycastVehicle } from '@react-three/cannon';
 import { useControls as useKeyboard } from '../hooks/useControls';
@@ -94,71 +94,88 @@ export function Car({ position = CAR_SPAWN_POSITION }: { position?: [number, num
   }), useRef<THREE.Group>(null));
 
   const controls = useKeyboard();
-  const { cameraMode, lights } = controls;
+  const [lights, setLights] = useState(false);
+
+  // Toggle lights via L key — needs React state so JSX re-renders
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'l' && !e.repeat) setLights(v => !v);
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
+
   const settings = useGameStore(s => s.settings);
   const playerState = useGameStore(s => s.playerState);
   const setInteractPrompt = useGameStore(s => s.setInteractPrompt);
   const lastInteract = useRef(false);
   const wasDriving = useRef(playerState === 'driving');
   const cameraTransitionStart = useRef<number | null>(null);
+  // Keep a ref so useFrame always reads the live playerState without stale closures
+  const playerStateRef = useRef(playerState);
+  useEffect(() => { playerStateRef.current = playerState; }, [playerState]);
+
+  // Reusable objects for the car camera — allocated once
+  const _localCamPos = useMemo(() => new THREE.Vector3(), []);
+  const _localLookAt = useMemo(() => new THREE.Vector3(), []);
+  const _worldPos = useMemo(() => new THREE.Vector3(), []);
+  const _worldQuat = useMemo(() => new THREE.Quaternion(), []);
+  const _camTargetPos = useMemo(() => new THREE.Vector3(), []);
+  const _camLookAtPos = useMemo(() => new THREE.Vector3(), []);
+  const _camMatrix = useMemo(() => new THREE.Matrix4(), []);
+  const _camTargetQuat = useMemo(() => new THREE.Quaternion(), []);
+  const _camUp = useMemo(() => new THREE.Vector3(0, 1, 0), []);
 
   useFrame((state) => {
-    const { forward, backward, left, right, brake, reset, interact } = controls;
-    
-    if (playerState === 'driving') {
+    const isDriving = playerStateRef.current === 'driving';
+
+    if (isDriving) {
       if (!wasDriving.current) {
         cameraTransitionStart.current = state.clock.elapsedTime;
         wasDriving.current = true;
       }
       setInteractPrompt('Press F to exit vehicle');
-      
-      // Camera logic for driving
+
+      // Camera logic for driving — read cameraMode live from the controls object
+      const cameraMode = controls.cameraMode;
       if (!settings.satelliteView && chassisRef.current) {
         const chassis = chassisRef.current;
-        const localCamPos = new THREE.Vector3();
-        const localLookAt = new THREE.Vector3();
-        
-        if (cameraMode === 0) { 
-          // Chase camera (behind and slightly up)
-          localCamPos.set(0, 3, 8); 
-          localLookAt.set(0, 1, -5); 
-        } else if (cameraMode === 1) { 
-          // Far camera
-          localCamPos.set(0, 6, 14); 
-          localLookAt.set(0, 1, -5); 
-        } else if (cameraMode === 2) { 
-          // Top camera
-          localCamPos.set(0, 25, 0.1); // Slight offset to prevent gimbal lock
-          localLookAt.set(0, 0, 0); 
-        } else if (cameraMode === 3) { 
+
+        if (cameraMode === 0) {
+          _localCamPos.set(0, 3, 8);
+          _localLookAt.set(0, 1, -5);
+        } else if (cameraMode === 1) {
+          _localCamPos.set(0, 6, 14);
+          _localLookAt.set(0, 1, -5);
+        } else if (cameraMode === 2) {
+          _localCamPos.set(0, 25, 0.1);
+          _localLookAt.set(0, 0, 0);
+        } else {
           // FPS/Dash camera
-          localCamPos.set(-0.4, 0.8, -0.5); // Inside cabin (driver seat)
-          localLookAt.set(-0.4, 0.8, -10); 
+          _localCamPos.set(-0.4, 0.8, -0.5);
+          _localLookAt.set(-0.4, 0.8, -10);
         }
 
-        // Convert local to world
-        const worldPos = new THREE.Vector3();
-        const worldQuat = new THREE.Quaternion();
-        chassis.getWorldPosition(worldPos);
-        chassis.getWorldQuaternion(worldQuat);
+        chassis.getWorldPosition(_worldPos);
+        chassis.getWorldQuaternion(_worldQuat);
 
-        const targetPos = localCamPos.clone().applyQuaternion(worldQuat).add(worldPos);
-        const targetLookAt = localLookAt.clone().applyQuaternion(worldQuat).add(worldPos);
+        _camTargetPos.copy(_localCamPos).applyQuaternion(_worldQuat).add(_worldPos);
+        _camLookAtPos.copy(_localLookAt).applyQuaternion(_worldQuat).add(_worldPos);
 
-        // Calculate target rotation using lookAt
-        const m = new THREE.Matrix4().lookAt(targetPos, targetLookAt, new THREE.Vector3(0, 1, 0));
-        const targetQuat = new THREE.Quaternion().setFromRotationMatrix(m);
+        _camMatrix.lookAt(_camTargetPos, _camLookAtPos, _camUp);
+        _camTargetQuat.setFromRotationMatrix(_camMatrix);
 
-        // Smoothly interpolate the main camera (use higher lerp factor for tighter follow)
-        // For FPS mode, we want it to be rigid
-        const transitionElapsed = cameraTransitionStart.current === null ? cameraTransitionDuration : state.clock.elapsedTime - cameraTransitionStart.current;
+        const transitionElapsed = cameraTransitionStart.current === null
+          ? cameraTransitionDuration
+          : state.clock.elapsedTime - cameraTransitionStart.current;
         const transitionAlpha = THREE.MathUtils.clamp(transitionElapsed / cameraTransitionDuration, 0, 1);
         const normalLerpFactor = cameraMode === 3 ? 1 : 0.15;
         const lerpFactor = cameraMode === 3
           ? normalLerpFactor
           : THREE.MathUtils.lerp(0.03, normalLerpFactor, transitionAlpha);
-        state.camera.position.lerp(targetPos, lerpFactor);
-        state.camera.quaternion.slerp(targetQuat, lerpFactor);
+
+        state.camera.position.lerp(_camTargetPos, lerpFactor);
+        state.camera.quaternion.slerp(_camTargetQuat, lerpFactor);
       }
     } else {
       wasDriving.current = false;
@@ -168,8 +185,8 @@ export function Car({ position = CAR_SPAWN_POSITION }: { position?: [number, num
 
   useFrame(() => {
     const { forward, backward, left, right, brake, reset, interact } = controls;
-    
-    if (interact && !lastInteract.current && playerState === 'driving') {
+
+    if (interact && !lastInteract.current && playerStateRef.current === 'driving') {
       const pos = chassisRef.current?.position;
       const quat = chassisRef.current?.quaternion;
       if (pos && quat) {
@@ -188,7 +205,7 @@ export function Car({ position = CAR_SPAWN_POSITION }: { position?: [number, num
     }
     lastInteract.current = interact;
 
-    if (playerState !== 'driving') {
+    if (playerStateRef.current !== 'driving') {
       vehicleApi.setBrake(maxBrake, 0);
       vehicleApi.setBrake(maxBrake, 1);
       vehicleApi.setBrake(maxBrake, 2);
