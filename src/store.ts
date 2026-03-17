@@ -51,6 +51,8 @@ interface GameState {
   setPlayerState: (state: 'driving' | 'walking') => void;
   setVehicleType: (type: 'car' | 'van' | 'truck') => void;
   setPlayerPosition: (pos: [number, number, number]) => void;
+  interactPrompt: string | null;
+  setInteractPrompt: (prompt: string | null) => void;
 }
 
 const getRandomLocation = (current: [number, number, number]) => {
@@ -92,4 +94,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   setPlayerState: (state) => set({ playerState: state }),
   setVehicleType: (type) => set({ vehicleType: type }),
   setPlayerPosition: (pos) => set({ playerPosition: pos }),
+  interactPrompt: null,
+  setInteractPrompt: (prompt) => set({ interactPrompt: prompt }),
 }));

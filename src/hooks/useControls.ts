@@ -11,6 +11,7 @@ export function useControls() {
     lights: false,
     interact: false,
     cameraMode: 0, // 0: Chase, 1: Far, 2: Top, 3: FPS
+    sprint: false,
   });
 
   useEffect(() => {
@@ -31,6 +32,9 @@ export function useControls() {
         case 'd':
         case 'arrowright':
           setControls((c) => ({ ...c, right: true }));
+          break;
+        case 'shift':
+          setControls((c) => ({ ...c, sprint: true }));
           break;
         case ' ':
           setControls((c) => ({ ...c, brake: true }));
@@ -73,6 +77,9 @@ export function useControls() {
         case 'd':
         case 'arrowright':
           setControls((c) => ({ ...c, right: false }));
+          break;
+        case 'shift':
+          setControls((c) => ({ ...c, sprint: false }));
           break;
         case ' ':
           setControls((c) => ({ ...c, brake: false }));

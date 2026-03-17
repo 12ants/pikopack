@@ -96,16 +96,81 @@ export function Car({ position = [0, 2, 0] }: { position?: [number, number, numb
   const { cameraMode, lights } = controls;
   const settings = useGameStore(s => s.settings);
   const playerState = useGameStore(s => s.playerState);
+  const setInteractPrompt = useGameStore(s => s.setInteractPrompt);
   const lastInteract = useRef(false);
+
+  useFrame((state) => {
+    const { forward, backward, left, right, brake, reset, interact } = controls;
+    
+    if (playerState === 'driving') {
+      setInteractPrompt('Press F to exit vehicle');
+      
+      // Camera logic for driving
+      if (!settings.satelliteView && chassisRef.current) {
+        const chassis = chassisRef.current;
+        const localCamPos = new THREE.Vector3();
+        const localLookAt = new THREE.Vector3();
+        
+        if (cameraMode === 0) { 
+          // Chase camera (behind and slightly up)
+          localCamPos.set(0, 3, 8); 
+          localLookAt.set(0, 1, -5); 
+        } else if (cameraMode === 1) { 
+          // Far camera
+          localCamPos.set(0, 6, 14); 
+          localLookAt.set(0, 1, -5); 
+        } else if (cameraMode === 2) { 
+          // Top camera
+          localCamPos.set(0, 25, 0.1); // Slight offset to prevent gimbal lock
+          localLookAt.set(0, 0, 0); 
+        } else if (cameraMode === 3) { 
+          // FPS/Dash camera
+          localCamPos.set(-0.4, 0.8, -0.5); // Inside cabin (driver seat)
+          localLookAt.set(-0.4, 0.8, -10); 
+        }
+
+        // Convert local to world
+        const worldPos = new THREE.Vector3();
+        const worldQuat = new THREE.Quaternion();
+        chassis.getWorldPosition(worldPos);
+        chassis.getWorldQuaternion(worldQuat);
+
+        const targetPos = localCamPos.clone().applyQuaternion(worldQuat).add(worldPos);
+        const targetLookAt = localLookAt.clone().applyQuaternion(worldQuat).add(worldPos);
+
+        // Calculate target rotation using lookAt
+        const m = new THREE.Matrix4().lookAt(targetPos, targetLookAt, new THREE.Vector3(0, 1, 0));
+        const targetQuat = new THREE.Quaternion().setFromRotationMatrix(m);
+
+        // Smoothly interpolate the main camera (use higher lerp factor for tighter follow)
+        // For FPS mode, we want it to be rigid
+        const lerpFactor = cameraMode === 3 ? 1 : 0.15;
+        state.camera.position.lerp(targetPos, lerpFactor);
+        state.camera.quaternion.slerp(targetQuat, lerpFactor);
+      }
+    } else {
+      setInteractPrompt(null);
+    }
+  });
 
   useFrame(() => {
     const { forward, backward, left, right, brake, reset, interact } = controls;
     
     if (interact && !lastInteract.current && playerState === 'driving') {
       const pos = chassisRef.current?.position;
-      if (pos) {
-        useGameStore.getState().setPlayerPosition([pos.x + 2, pos.y + 1, pos.z]);
+      const quat = chassisRef.current?.quaternion;
+      if (pos && quat) {
+        // Calculate horizontal offset to the side of the car, ignoring pitch/roll
+        const euler = new THREE.Euler().setFromQuaternion(quat, 'YXZ');
+        const offset = new THREE.Vector3(-3, 0, 0); // 3 units to the left side (driver's side)
+        offset.applyEuler(new THREE.Euler(0, euler.y, 0));
+        
+        const spawnPos = pos.clone().add(offset);
+        // Spawn on flat ground (y=1 ensures the 0.5 radius sphere drops safely to y=0.5)
+        const spawnY = 1.0;
+        useGameStore.getState().setPlayerPosition([spawnPos.x, spawnY, spawnPos.z]);
         useGameStore.getState().setPlayerState('walking');
+        setInteractPrompt(null);
       }
     }
     lastInteract.current = interact;
@@ -263,16 +328,6 @@ export function Car({ position = [0, 2, 0] }: { position?: [number, number, numb
   return (
     <group ref={vehicle}>
       <group ref={chassisRef}>
-        {/* Mount the camera directly to the car chassis */}
-        {!settings.satelliteView && playerState === 'driving' && (
-          <>
-            {cameraMode === 0 && <PerspectiveCamera makeDefault position={[0, 6, 15]} rotation={[-0.2, 0, 0]} />}
-            {cameraMode === 1 && <PerspectiveCamera makeDefault position={[0, 8, 18]} rotation={[-0.3, 0, 0]} />}
-            {cameraMode === 2 && <PerspectiveCamera makeDefault position={[0, 25, 0]} rotation={[-Math.PI / 2, 0, 0]} />}
-            {cameraMode === 3 && <PerspectiveCamera makeDefault position={[0, 0.8, -0.5]} rotation={[0, 0, 0]} />}
-          </>
-        )}
-
         {/* Saab 900 Body Group - Rotated so Positive X (Front) points to Negative Z */}
         <group rotation={[0, Math.PI / 2, 0]} position={[0, vehicleType === 'truck' ? -0.65 : vehicleType === 'van' ? -0.5 : -0.15, 0]}>
           {/* Main Silver Body */}

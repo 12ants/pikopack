@@ -23,7 +23,7 @@ import { Traffic } from './components/Traffic';
 import { Weather } from './components/Weather';
 import { Player } from './components/Player';
 import { Leva } from 'leva';
-import { Sky, Environment, PerspectiveCamera } from '@react-three/drei';
+import { Sky, Environment, PerspectiveCamera, SoftShadows } from '@react-three/drei';
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import { useGameStore, globalCarPosition } from './store';
 import { useState, useEffect, useRef } from 'react';
@@ -31,6 +31,7 @@ import { useState, useEffect, useRef } from 'react';
 export default function App() {
   const settings = useGameStore(s => s.settings);
   const status = useGameStore(s => s.status);
+  const interactPrompt = useGameStore(s => s.interactPrompt);
 
   return (
     <div className="w-screen h-screen bg-black overflow-hidden font-mono">
@@ -42,6 +43,12 @@ export default function App() {
           <Settings />
           <Leva hidden={!settings.devInfo} collapsed={false} />
           
+          {interactPrompt && (
+            <div className="absolute bottom-32 left-1/2 -translate-x-1/2 text-white text-lg z-10 pointer-events-none bg-black/80 px-6 py-3 border border-white/30 uppercase tracking-widest animate-pulse">
+              {interactPrompt}
+            </div>
+          )}
+
           <div className="absolute bottom-6 left-6 text-white text-xs z-10 pointer-events-none opacity-70 bg-black/80 p-4 border border-white/20 uppercase tracking-widest">
             <h1 className="text-white/50 mb-3 border-b border-white/20 pb-2">SYS.CONTROLS</h1>
             <div className="grid grid-cols-2 gap-x-6 gap-y-2">
@@ -49,7 +56,8 @@ export default function App() {
               <p><span className="text-white/50">S/↓</span> BRAKE/REV</p>
               <p><span className="text-white/50">A/←</span> STEER L</p>
               <p><span className="text-white/50">D/→</span> STEER R</p>
-              <p><span className="text-white/50">SPACE</span> E-BRAKE</p>
+              <p><span className="text-white/50">SHIFT</span> SPRINT</p>
+              <p><span className="text-white/50">SPACE</span> JUMP/BRK</p>
               <p><span className="text-white/50">F</span> ENTER/EXIT</p>
               <p><span className="text-white/50">R</span> RESET</p>
               <p><span className="text-white/50">L</span> LIGHTS</p>
@@ -60,7 +68,7 @@ export default function App() {
           <Canvas 
             gl={{ antialias: false, alpha: false, powerPreference: "default", failIfMajorPerformanceCaveat: false }}
             shadows={settings.shadows} 
-            camera={{ position: [0, 5, 15], fov: 20 }} 
+            camera={{ position: [0, 5, 15], fov: 50 }} 
             dpr={1} 
             performance={{ min: 0.5 }}
           >
@@ -76,16 +84,10 @@ export default function App() {
         <ambientLight intensity={settings.timeOfDay === 'twilight' ? 0.02 : 0.01} />
         
         {settings.timeOfDay === 'twilight' && settings.shadows && (
-          <directionalLight
-            castShadow
-            position={[40, 60, 150]}
-            intensity={1}
-            shadow-mapSize={[1024, 1024]}
-            shadow-camera-left={-150}
-            shadow-camera-right={150}
-            shadow-camera-top={150}
-            shadow-camera-bottom={-150}
-          />
+          <>
+            <SoftShadows size={15} focus={0.5} samples={10} />
+            <DynamicShadows />
+          </>
         )}
         
         <Physics broadphase="SAP" gravity={[0, -9, 0]}>
@@ -145,4 +147,37 @@ function SatelliteCamera() {
   });
 
   return <PerspectiveCamera ref={cameraRef} makeDefault fov={50} position={[0, 150, 0]} />;
+}
+
+function DynamicShadows() {
+  const lightRef = useRef<THREE.DirectionalLight>(null!);
+  const targetRef = useRef<THREE.Object3D>(null!);
+
+  useFrame(() => {
+    if (lightRef.current && targetRef.current) {
+      const offset = new THREE.Vector3(40, 60, 150).normalize().multiplyScalar(100);
+      lightRef.current.position.copy(globalCarPosition).add(offset);
+      targetRef.current.position.copy(globalCarPosition);
+      lightRef.current.target = targetRef.current;
+    }
+  });
+
+  return (
+    <group>
+      <directionalLight
+        ref={lightRef}
+        castShadow
+        intensity={1}
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-near={10}
+        shadow-camera-far={200}
+        shadow-camera-left={-60}
+        shadow-camera-right={60}
+        shadow-camera-top={60}
+        shadow-camera-bottom={-60}
+        shadow-bias={-0.0005}
+      />
+      <object3D ref={targetRef} />
+    </group>
+  );
 }
