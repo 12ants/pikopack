@@ -5,143 +5,206 @@ import * as THREE from 'three';
 import { useControls as useKeyboard } from '../hooks/useControls';
 import { useGameStore, globalCarPosition } from '../store';
 
-// Reusable objects — allocated once, mutated each frame, never recreated
-const _playerPos = new THREE.Vector3();
-const _carPos = new THREE.Vector3();
-const _direction = new THREE.Vector3();
-const _cameraOffset = new THREE.Vector3();
-const _camTargetPos = new THREE.Vector3();
-const _lookAt = new THREE.Vector3();
-const _lookAtMatrix = new THREE.Matrix4();
-const _targetQuat = new THREE.Quaternion();
-const _up = new THREE.Vector3(0, 1, 0);
-const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
+// ---------------------------------------------------------------------------
+// Module-level reusable objects — allocated once, mutated each frame
+// ---------------------------------------------------------------------------
+const _playerPos   = new THREE.Vector3();
+const _carPos      = new THREE.Vector3();
+const _moveInput   = new THREE.Vector3();
+const _camOffset   = new THREE.Vector3();
+const _camTarget   = new THREE.Vector3();
+const _lookAt      = new THREE.Vector3();
+const _lookMat     = new THREE.Matrix4();
+const _targetQuat  = new THREE.Quaternion();
+const _up          = new THREE.Vector3(0, 1, 0);
+const _camYawEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 
-// CharacterModel reads from refs passed by Player so it always sees live values.
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+const WALK_SPEED       = 7;
+const SPRINT_SPEED     = 13;
+const CAMERA_DIST      = 6;    // metres behind player
+const CAMERA_HEIGHT    = 2.5;  // metres above player centre
+const MOUSE_SENSITIVITY = 0.0025;
+const CAM_LERP         = 0.18; // position lerp per frame
+const CAM_ROT_LERP     = 0.22; // rotation lerp per frame
+const INTERACT_RANGE   = 5;
+
+// ---------------------------------------------------------------------------
+// CharacterModel
+// Reads live values from refs so useFrame always gets up-to-date state
+// without triggering React re-renders.
+// ---------------------------------------------------------------------------
 function CharacterModel({
-  rotationRef,
-  velocityRef,
-  turnDirRef,
+  facingRef,   // world-space Y angle the character body should face
+  speedRef,    // horizontal speed magnitude
+  vyRef,       // vertical velocity (for jump detection)
 }: {
-  rotationRef: React.RefObject<number>;
-  velocityRef: React.RefObject<number[]>;
-  turnDirRef: React.RefObject<number>;
+  facingRef: React.RefObject<number>;
+  speedRef:  React.RefObject<number>;
+  vyRef:     React.RefObject<number>;
 }) {
-  const group = useRef<THREE.Group>(null);
-  const bodyRef = useRef<THREE.Mesh>(null);
-  const leftLegRef = useRef<THREE.Group>(null);
+  const rootRef     = useRef<THREE.Group>(null);
+  const torsoRef    = useRef<THREE.Group>(null);
+  const headRef     = useRef<THREE.Mesh>(null);
+  const leftLegRef  = useRef<THREE.Group>(null);
   const rightLegRef = useRef<THREE.Group>(null);
-  const leftArmRef = useRef<THREE.Group>(null);
+  const leftArmRef  = useRef<THREE.Group>(null);
   const rightArmRef = useRef<THREE.Group>(null);
 
-  useFrame((state) => {
-    if (
-      !group.current || !bodyRef.current ||
-      !leftLegRef.current || !rightLegRef.current ||
-      !leftArmRef.current || !rightArmRef.current
-    ) return;
+  useFrame(({ clock }) => {
+    if (!rootRef.current || !torsoRef.current || !leftLegRef.current ||
+        !rightLegRef.current || !leftArmRef.current || !rightArmRef.current) return;
 
-    const rotation = rotationRef.current ?? 0;
-    const vel = velocityRef.current ?? [0, 0, 0];
-    const turnDir = turnDirRef.current ?? 0;
+    const facing = facingRef.current ?? 0;
+    const speed  = speedRef.current  ?? 0;
+    const vy     = vyRef.current     ?? 0;
 
-    // Smooth rotation — shortest-path interpolation
-    let diff = rotation - group.current.rotation.y;
-    while (diff < -Math.PI) diff += Math.PI * 2;
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    group.current.rotation.y += diff * 0.15;
+    // ── Smooth body yaw (shortest-arc interpolation) ──────────────────────
+    let dyaw = facing - rootRef.current.rotation.y;
+    while (dyaw >  Math.PI) dyaw -= Math.PI * 2;
+    while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+    rootRef.current.rotation.y += dyaw * 0.2;
 
-    // Lean into turns
-    group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, turnDir * 0.2, 0.1);
+    // ── Animation ─────────────────────────────────────────────────────────
+    const t = clock.elapsedTime;
+    const isAirborne = vy > 1.5 || vy < -1.5;
 
-    const t = state.clock.elapsedTime;
-    const speed = Math.sqrt(vel[0] ** 2 + vel[2] ** 2);
-    const isJumping = Math.abs(vel[1]) > 0.5;
-
-    if (isJumping) {
-      leftLegRef.current.rotation.x = -0.5;
-      rightLegRef.current.rotation.x = 0.2;
-      leftArmRef.current.rotation.x = Math.PI;
-      rightArmRef.current.rotation.x = Math.PI;
-      bodyRef.current.position.y = 0.75;
-    } else if (speed > 0.1) {
-      const animSpeed = speed > 10 ? 15 : 10;
-      const walkCycle = Math.sin(t * animSpeed);
-      leftLegRef.current.rotation.x = walkCycle * 0.5;
-      rightLegRef.current.rotation.x = -walkCycle * 0.5;
-      leftArmRef.current.rotation.x = -walkCycle * 0.5;
-      rightArmRef.current.rotation.x = walkCycle * 0.5;
-      bodyRef.current.position.y = 0.75 + Math.abs(Math.sin(t * animSpeed)) * 0.1;
+    if (isAirborne) {
+      // jump / fall pose
+      leftLegRef.current.rotation.x  = THREE.MathUtils.lerp(leftLegRef.current.rotation.x,  -0.6, 0.2);
+      rightLegRef.current.rotation.x = THREE.MathUtils.lerp(rightLegRef.current.rotation.x,  0.3, 0.2);
+      leftArmRef.current.rotation.x  = THREE.MathUtils.lerp(leftArmRef.current.rotation.x,  -1.2, 0.2);
+      rightArmRef.current.rotation.x = THREE.MathUtils.lerp(rightArmRef.current.rotation.x, -1.2, 0.2);
+      torsoRef.current.rotation.x    = THREE.MathUtils.lerp(torsoRef.current.rotation.x, 0.15, 0.15);
+    } else if (speed > 0.5) {
+      // walk / run cycle
+      const cycleRate = speed > WALK_SPEED * 0.8 ? 14 : 9; // faster arms/legs when sprinting
+      const swing     = Math.sin(t * cycleRate) * Math.min(speed / WALK_SPEED, 1.3) * 0.55;
+      leftLegRef.current.rotation.x  = swing;
+      rightLegRef.current.rotation.x = -swing;
+      leftArmRef.current.rotation.x  = -swing * 0.7;
+      rightArmRef.current.rotation.x =  swing * 0.7;
+      // subtle body bob
+      torsoRef.current.rotation.x = THREE.MathUtils.lerp(
+        torsoRef.current.rotation.x,
+        Math.abs(Math.sin(t * cycleRate)) * 0.04,
+        0.15,
+      );
     } else {
-      leftLegRef.current.rotation.x = 0;
-      rightLegRef.current.rotation.x = 0;
-      leftArmRef.current.rotation.x = 0;
-      rightArmRef.current.rotation.x = 0;
-      bodyRef.current.position.y = 0.75 + Math.sin(t * 2) * 0.02;
+      // idle breath
+      const breathe = Math.sin(t * 1.8) * 0.02;
+      leftLegRef.current.rotation.x  = THREE.MathUtils.lerp(leftLegRef.current.rotation.x,  0, 0.1);
+      rightLegRef.current.rotation.x = THREE.MathUtils.lerp(rightLegRef.current.rotation.x, 0, 0.1);
+      leftArmRef.current.rotation.x  = THREE.MathUtils.lerp(leftArmRef.current.rotation.x,  0.1, 0.1);
+      rightArmRef.current.rotation.x = THREE.MathUtils.lerp(rightArmRef.current.rotation.x, 0.1, 0.1);
+      torsoRef.current.rotation.x    = THREE.MathUtils.lerp(torsoRef.current.rotation.x, breathe, 0.1);
     }
   });
 
+  // ── Geometry ──────────────────────────────────────────────────────────────
+  // Root sits at physics sphere centre (y=0 relative to mesh).
+  // We shift the visual down so feet land at y = -0.5 (bottom of sphere).
+  //
+  //   feet  pivot @ root y=0,  leg mesh centre y = -0.35  → feet bottom @ -0.7
+  //   → offset root by +0.2 so feet sit at ≈ -0.5
   return (
-    <group ref={group} position={[0, -0.5, 0]}>
-      {/* Body */}
-      <mesh ref={bodyRef} position={[0, 0.75, 0]} castShadow>
-        <boxGeometry args={[0.6, 0.8, 0.4]} />
-        <meshStandardMaterial color="royalblue" />
-
-        {/* Head */}
-        <mesh position={[0, 0.6, 0]} castShadow>
-          <boxGeometry args={[0.4, 0.4, 0.4]} />
-          <meshStandardMaterial color="peachpuff" />
-          <mesh position={[0.1, 0.1, 0.21]}>
-            <boxGeometry args={[0.08, 0.08, 0.08]} />
-            <meshStandardMaterial color="black" />
-          </mesh>
-          <mesh position={[-0.1, 0.1, 0.21]}>
-            <boxGeometry args={[0.08, 0.08, 0.08]} />
-            <meshStandardMaterial color="black" />
-          </mesh>
-        </mesh>
-
-        {/* Arms */}
-        <group ref={leftArmRef} position={[0.4, 0.3, 0]}>
-          <mesh position={[0, -0.3, 0]} castShadow>
-            <boxGeometry args={[0.2, 0.6, 0.2]} />
-            <meshStandardMaterial color="royalblue" />
-          </mesh>
-        </group>
-        <group ref={rightArmRef} position={[-0.4, 0.3, 0]}>
-          <mesh position={[0, -0.3, 0]} castShadow>
-            <boxGeometry args={[0.2, 0.6, 0.2]} />
-            <meshStandardMaterial color="royalblue" />
-          </mesh>
-        </group>
-      </mesh>
-
-      {/* Legs */}
-      <group ref={leftLegRef} position={[0.15, 0.35, 0]}>
+    <group ref={rootRef} position={[0, -0.3, 0]}>
+      {/* ── Legs (pivot at hip) ────────────────────────────── */}
+      <group ref={leftLegRef} position={[0.17, 0, 0]}>
         <mesh position={[0, -0.35, 0]} castShadow>
-          <boxGeometry args={[0.2, 0.7, 0.2]} />
-          <meshStandardMaterial color="darkblue" />
+          <boxGeometry args={[0.22, 0.7, 0.22]} />
+          <meshStandardMaterial color="#1a237e" roughness={0.8} />
+        </mesh>
+        {/* shoe */}
+        <mesh position={[0, -0.73, 0.06]} castShadow>
+          <boxGeometry args={[0.24, 0.14, 0.32]} />
+          <meshStandardMaterial color="#111" roughness={0.9} />
         </mesh>
       </group>
-      <group ref={rightLegRef} position={[-0.15, 0.35, 0]}>
+      <group ref={rightLegRef} position={[-0.17, 0, 0]}>
         <mesh position={[0, -0.35, 0]} castShadow>
-          <boxGeometry args={[0.2, 0.7, 0.2]} />
-          <meshStandardMaterial color="darkblue" />
+          <boxGeometry args={[0.22, 0.7, 0.22]} />
+          <meshStandardMaterial color="#1a237e" roughness={0.8} />
         </mesh>
+        <mesh position={[0, -0.73, 0.06]} castShadow>
+          <boxGeometry args={[0.24, 0.14, 0.32]} />
+          <meshStandardMaterial color="#111" roughness={0.9} />
+        </mesh>
+      </group>
+
+      {/* ── Torso ──────────────────────────────────────────── */}
+      <group ref={torsoRef} position={[0, 0.1, 0]}>
+        <mesh castShadow>
+          <boxGeometry args={[0.65, 0.75, 0.38]} />
+          <meshStandardMaterial color="#1565c0" roughness={0.7} metalness={0.05} />
+        </mesh>
+
+        {/* collar / neck */}
+        <mesh position={[0, 0.42, 0]} castShadow>
+          <boxGeometry args={[0.28, 0.14, 0.28]} />
+          <meshStandardMaterial color="#f5c5a3" roughness={0.8} />
+        </mesh>
+
+        {/* ── Head ─────────────────────────────────────────── */}
+        <mesh ref={headRef} position={[0, 0.72, 0]} castShadow>
+          <boxGeometry args={[0.42, 0.42, 0.42]} />
+          <meshStandardMaterial color="#f5c5a3" roughness={0.7} />
+          {/* eyes */}
+          <mesh position={[ 0.11,  0.06, 0.22]}>
+            <boxGeometry args={[0.09, 0.09, 0.04]} />
+            <meshStandardMaterial color="#222" />
+          </mesh>
+          <mesh position={[-0.11,  0.06, 0.22]}>
+            <boxGeometry args={[0.09, 0.09, 0.04]} />
+            <meshStandardMaterial color="#222" />
+          </mesh>
+          {/* hair */}
+          <mesh position={[0, 0.22, -0.02]}>
+            <boxGeometry args={[0.44, 0.12, 0.46]} />
+            <meshStandardMaterial color="#4a2c0a" roughness={1} />
+          </mesh>
+        </mesh>
+
+        {/* ── Arms (pivot at shoulder) ───────────────────── */}
+        <group ref={leftArmRef} position={[0.43, 0.28, 0]}>
+          {/* upper arm */}
+          <mesh position={[0.11, -0.18, 0]} castShadow>
+            <boxGeometry args={[0.22, 0.38, 0.22]} />
+            <meshStandardMaterial color="#1565c0" roughness={0.7} metalness={0.05} />
+          </mesh>
+          {/* forearm */}
+          <mesh position={[0.11, -0.5, 0]} castShadow>
+            <boxGeometry args={[0.19, 0.34, 0.19]} />
+            <meshStandardMaterial color="#f5c5a3" roughness={0.8} />
+          </mesh>
+        </group>
+        <group ref={rightArmRef} position={[-0.43, 0.28, 0]}>
+          <mesh position={[-0.11, -0.18, 0]} castShadow>
+            <boxGeometry args={[0.22, 0.38, 0.22]} />
+            <meshStandardMaterial color="#1565c0" roughness={0.7} metalness={0.05} />
+          </mesh>
+          <mesh position={[-0.11, -0.5, 0]} castShadow>
+            <boxGeometry args={[0.19, 0.34, 0.19]} />
+            <meshStandardMaterial color="#f5c5a3" roughness={0.8} />
+          </mesh>
+        </group>
       </group>
     </group>
   );
 }
 
-const CAMERA_TRANSITION_DURATION = 0.6;
-
+// ---------------------------------------------------------------------------
+// Player
+// ---------------------------------------------------------------------------
 export function Player() {
-  const playerState = useGameStore(s => s.playerState);
+  const playerState    = useGameStore(s => s.playerState);
   const setPlayerState = useGameStore(s => s.setPlayerState);
   const playerPosition = useGameStore(s => s.playerPosition);
   const setInteractPrompt = useGameStore(s => s.setInteractPrompt);
 
+  // ── Physics ───────────────────────────────────────────────────────────────
   const meshRef = useRef<THREE.Mesh>(null);
   const [, api] = useSphere(() => ({
     mass: 70,
@@ -149,142 +212,211 @@ export function Player() {
     position: playerPosition,
     args: [0.5],
     fixedRotation: true,
-    linearDamping: 0.95,
+    linearDamping: 0.9,  // enough to stop smoothly without feeling sluggish
     angularDamping: 1,
     allowSleep: false,
   }), meshRef);
 
-  const controls = useKeyboard();
-  const velocityRef = useRef<number[]>([0, 0, 0]);
-  const playerRotationRef = useRef(0);
-  const turnDirRef = useRef(0);
-  const lastInteract = useRef(false);
-  const lastPrompt = useRef<string | null>(null);
-  const wasWalking = useRef(false);
-  const cameraTransitionStart = useRef<number | null>(null);
-  const playerStateRef = useRef(playerState);
+  // ── Live state refs (never cause re-renders, safe to read in useFrame) ────
+  const controls        = useKeyboard();
+  const velocityRef     = useRef<number[]>([0, 0, 0]);
+  const playerStateRef  = useRef(playerState);
+  const lastInteract    = useRef(false);
+  const lastPrompt      = useRef<string | null>(null);
+  const wasWalking      = useRef(false);
 
-  // Keep a ref copy of playerState so useFrame never reads a stale closure
+  // Camera-specific refs
+  const camYaw          = useRef(0);   // horizontal orbit angle around player
+  const camPitch        = useRef(0.3); // vertical orbit angle (radians, clamped)
+  const isPointerLocked = useRef(false);
+
+  // CharacterModel animation refs
+  const facingRef = useRef(0);   // world Y angle the body should face
+  const speedRef  = useRef(0);
+  const vyRef     = useRef(0);
+
+  // Sync playerState to ref so useFrame never reads stale React state
   useEffect(() => {
     playerStateRef.current = playerState;
   }, [playerState]);
 
-  // Teleport the physics body when playerState or spawn position changes
+  // ── Subscribe to physics velocity ─────────────────────────────────────────
+  useEffect(() => {
+    return api.velocity.subscribe(v => { velocityRef.current = v; });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Teleport body when state/spawn changes ────────────────────────────────
   useEffect(() => {
     if (playerState === 'walking') {
       api.position.set(playerPosition[0], playerPosition[1], playerPosition[2]);
       api.velocity.set(0, 0, 0);
       api.angularVelocity.set(0, 0, 0);
     } else {
-      // Park the sphere well out of the way while driving
-      api.position.set(0, -200, 0);
+      api.position.set(0, -500, 0); // park far below world
       api.velocity.set(0, 0, 0);
       api.angularVelocity.set(0, 0, 0);
     }
   }, [playerState, playerPosition]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Pointer-lock mouse look ────────────────────────────────────────────────
   useEffect(() => {
-    return api.velocity.subscribe(v => { velocityRef.current = v; });
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return;
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isPointerLocked.current) return;
+      camYaw.current   -= e.movementX * MOUSE_SENSITIVITY;
+      camPitch.current -= e.movementY * MOUSE_SENSITIVITY;
+      camPitch.current  = THREE.MathUtils.clamp(camPitch.current, 0.05, 1.1);
+    };
+
+    const onLockChange = () => {
+      isPointerLocked.current = document.pointerLockElement === canvas;
+    };
+
+    const onClick = () => {
+      if (playerStateRef.current === 'walking' && !isPointerLocked.current) {
+        canvas.requestPointerLock();
+      }
+    };
+
+    canvas.addEventListener('click', onClick);
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('pointerlockchange', onLockChange);
+    return () => {
+      canvas.removeEventListener('click', onClick);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('pointerlockchange', onLockChange);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Per-frame update ──────────────────────────────────────────────────────
   useFrame((state) => {
     const isWalking = playerStateRef.current === 'walking';
 
     if (!isWalking) {
       wasWalking.current = false;
-      // Freeze physics while the player is in the car
+      // Keep physics body frozen while in the car
       api.velocity.set(0, 0, 0);
       velocityRef.current = [0, 0, 0];
+      speedRef.current    = 0;
+      vyRef.current       = 0;
       return;
     }
 
+    // Initialise camera yaw from car camera when first switching to walking
     if (!wasWalking.current) {
-      cameraTransitionStart.current = state.clock.elapsedTime;
-      wasWalking.current = true;
+      // Align camYaw with the current camera so there's no jarring snap
+      const { x, z } = state.camera.position;
+      if (!meshRef.current) { wasWalking.current = true; }
+      else {
+        meshRef.current.getWorldPosition(_playerPos);
+        const dx = _playerPos.x - x;
+        const dz = _playerPos.z - z;
+        if (Math.abs(dx) + Math.abs(dz) > 0.1) {
+          camYaw.current = Math.atan2(dx, dz); // face camera toward player initially
+        }
+        wasWalking.current = true;
+      }
     }
 
     const { forward, backward, left, right, interact, brake: jump, sprint } = controls;
 
     if (!meshRef.current) return;
     meshRef.current.getWorldPosition(_playerPos);
+    if (_playerPos.y < -50) return; // still teleporting
 
-    // Skip update until the sphere has actually teleported to the spawn position
-    if (_playerPos.y < -50) return;
-
-    // --- Interaction: enter car ---
+    // ── Interaction ─────────────────────────────────────────────────────────
     _carPos.set(globalCarPosition.x, globalCarPosition.y, globalCarPosition.z);
     const distToCar = _playerPos.distanceTo(_carPos);
-
-    const newPrompt = distToCar < 5 ? 'Press F to enter vehicle' : null;
+    const newPrompt = distToCar < INTERACT_RANGE ? 'Press F to enter vehicle' : null;
     if (newPrompt !== lastPrompt.current) {
       setInteractPrompt(newPrompt);
       lastPrompt.current = newPrompt;
     }
-
-    if (interact && !lastInteract.current && distToCar < 5) {
+    if (interact && !lastInteract.current && distToCar < INTERACT_RANGE) {
       setPlayerState('driving');
       setInteractPrompt(null);
       lastPrompt.current = null;
+      if (document.pointerLockElement) document.exitPointerLock();
     }
     lastInteract.current = interact;
 
-    // --- Rotation ---
-    if (left) playerRotationRef.current += 0.05;
-    if (right) playerRotationRef.current -= 0.05;
-    turnDirRef.current = Number(left) - Number(right);
+    // ── Camera-relative movement ─────────────────────────────────────────────
+    // Build a flat movement vector in world space from WASD relative to camera yaw.
+    // A/D strafes left/right, W/S moves forward/back.
+    _camYawEuler.set(0, camYaw.current, 0);
 
-    // --- Movement ---
-    _euler.set(0, playerRotationRef.current, 0);
+    let mx = Number(right) - Number(left);
+    let mz = Number(forward) - Number(backward);
+    const inputLen = Math.sqrt(mx * mx + mz * mz);
+    if (inputLen > 1) { mx /= inputLen; mz /= inputLen; } // normalise diagonal
 
-    const moveDir = Number(forward) - Number(backward);
-    const targetSpeed = sprint ? 14 : 8;
-    _direction.set(0, 0, moveDir * targetSpeed);
-    _direction.applyEuler(_euler);
+    _moveInput.set(mx, 0, mz).applyEuler(_camYawEuler);
 
+    const targetSpeed = sprint ? SPRINT_SPEED : WALK_SPEED;
     const vx = velocityRef.current[0];
     const vy = velocityRef.current[1];
     const vz = velocityRef.current[2];
-    const isMoving = moveDir !== 0;
-    const moveLerp = isMoving ? 0.25 : 0.12;
 
-    const nextVx = THREE.MathUtils.lerp(vx, _direction.x, moveLerp);
-    const nextVz = THREE.MathUtils.lerp(vz, _direction.z, moveLerp);
+    const hasInput = inputLen > 0;
+    const accel = hasInput ? 0.22 : 0.14; // decelerate slower than accelerate
 
-    // Jump — only when grounded (vy very close to 0)
-    if (jump && Math.abs(vy) < 0.15) {
-      api.velocity.set(nextVx, 6, nextVz);
+    const nextVx = THREE.MathUtils.lerp(vx, _moveInput.x * targetSpeed, accel);
+    const nextVz = THREE.MathUtils.lerp(vz, _moveInput.z * targetSpeed, accel);
+
+    // Jump — only allow when near ground (small vy and moving slowly vertically)
+    const isGrounded = Math.abs(vy) < 0.8;
+    if (jump && isGrounded) {
+      api.velocity.set(nextVx, 7, nextVz);
     } else {
       api.velocity.set(nextVx, vy, nextVz);
     }
 
-    // --- Third-person camera ---
+    // Update animation refs
+    const horizSpeed = Math.sqrt(nextVx * nextVx + nextVz * nextVz);
+    speedRef.current = horizSpeed;
+    vyRef.current    = vy;
+
+    // ── Character facing ─────────────────────────────────────────────────────
+    // Face the direction of movement only when actually moving.
+    if (horizSpeed > 0.3) {
+      facingRef.current = Math.atan2(_moveInput.x, _moveInput.z);
+    }
+
+    // ── Third-person orbit camera ────────────────────────────────────────────
     if (!useGameStore.getState().settings.satelliteView) {
-      _cameraOffset.set(0, 3, -8).applyEuler(_euler);
-      _camTargetPos.copy(_playerPos).add(_cameraOffset);
-      if (_camTargetPos.y < 0.5) _camTargetPos.y = 0.5;
+      // Spherical coords: yaw around Y, pitch down
+      const sinYaw   = Math.sin(camYaw.current);
+      const cosYaw   = Math.cos(camYaw.current);
+      const sinPitch = Math.sin(camPitch.current);
+      const cosPitch = Math.cos(camPitch.current);
+
+      _camOffset.set(
+        sinYaw * cosPitch * CAMERA_DIST,
+        sinPitch * CAMERA_DIST + CAMERA_HEIGHT,
+        cosYaw * cosPitch * CAMERA_DIST,
+      );
+
+      _camTarget.copy(_playerPos).add(_camOffset);
+      if (_camTarget.y < 0.4) _camTarget.y = 0.4;
 
       _lookAt.copy(_playerPos);
-      _lookAt.y += 1.5;
-      _lookAtMatrix.lookAt(_camTargetPos, _lookAt, _up);
-      _targetQuat.setFromRotationMatrix(_lookAtMatrix);
+      _lookAt.y += 1.0; // look at chest height
+      _lookMat.lookAt(_camTarget, _lookAt, _up);
+      _targetQuat.setFromRotationMatrix(_lookMat);
 
-      const elapsed = cameraTransitionStart.current === null
-        ? CAMERA_TRANSITION_DURATION
-        : state.clock.elapsedTime - cameraTransitionStart.current;
-      const alpha = THREE.MathUtils.clamp(elapsed / CAMERA_TRANSITION_DURATION, 0, 1);
-      const camLerp = THREE.MathUtils.lerp(0.03, 0.15, alpha);
-
-      state.camera.position.lerp(_camTargetPos, camLerp);
-      state.camera.quaternion.slerp(_targetQuat, camLerp);
+      state.camera.position.lerp(_camTarget,    CAM_LERP);
+      state.camera.quaternion.slerp(_targetQuat, CAM_ROT_LERP);
     }
   });
 
   return (
     <mesh ref={meshRef} visible={playerState === 'walking'}>
       <CharacterModel
-        rotationRef={playerRotationRef as React.RefObject<number>}
-        velocityRef={velocityRef as React.RefObject<number[]>}
-        turnDirRef={turnDirRef as React.RefObject<number>}
+        facingRef={facingRef as React.RefObject<number>}
+        speedRef={speedRef   as React.RefObject<number>}
+        vyRef={vyRef         as React.RefObject<number>}
       />
     </mesh>
   );
