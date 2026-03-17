@@ -25,7 +25,7 @@ import { Player } from './components/Player';
 import { Leva } from 'leva';
 import { Sky, Environment, PerspectiveCamera, SoftShadows } from '@react-three/drei';
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
-import { useGameStore, globalCarPosition } from './store';
+import { useGameStore, globalCarPosition, CAR_SPAWN_POSITION } from './store';
 import { useState, useEffect, useRef } from 'react';
 
 export default function App() {
@@ -120,7 +120,7 @@ function Scene() {
 
   return (
     <>
-      <Car position={[142, 2, 42]} />
+      <Car position={CAR_SPAWN_POSITION} />
       <Player />
       <Ground />
       <City key={`city-${settings.destructibles}`} />

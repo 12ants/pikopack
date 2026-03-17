@@ -5,9 +5,9 @@ import { useControls as useKeyboard } from '../hooks/useControls';
 import { useControls as useLeva } from 'leva';
 import * as THREE from 'three';
 import { PerspectiveCamera } from '@react-three/drei';
-import { useGameStore, globalCarPosition } from '../store';
+import { useGameStore, globalCarPosition, CAR_SPAWN_POSITION } from '../store';
 
-export function Car({ position = [0, 2, 0] }: { position?: [number, number, number] }) {
+export function Car({ position = CAR_SPAWN_POSITION }: { position?: [number, number, number] }) {
   const {
     mass,
     engineForce,
@@ -188,7 +188,7 @@ export function Car({ position = [0, 2, 0] }: { position?: [number, number, numb
     }
 
     if (reset) {
-      chassisApi.position.set(200, 52, 200);
+      chassisApi.position.set(...CAR_SPAWN_POSITION);
       chassisApi.velocity?.set(0, 0, 0);
       chassisApi.angularVelocity?.set(0, 0, 0);
       chassisApi.rotation.set(0, 0, 0);

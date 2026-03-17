@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 export const LOCATIONS: [number, number, number][] = [];
+export const CAR_SPAWN_POSITION: [number, number, number] = [142, 2, 42];
 
 // Intersections
 const intersections = [-120, -40, 40, 120];
@@ -23,7 +24,11 @@ for (const x of intersections) {
   }
 }
 
-export const globalCarPosition = { x: 0, y: 0, z: 0 };
+export const globalCarPosition = {
+  x: CAR_SPAWN_POSITION[0],
+  y: CAR_SPAWN_POSITION[1],
+  z: CAR_SPAWN_POSITION[2]
+};
 
 interface GameState {
   status: 'intro' | 'playing';
@@ -67,7 +72,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   targetLocation: LOCATIONS[0],
   playerState: 'driving',
   vehicleType: 'car',
-  playerPosition: [0, 2, 0],
+  playerPosition: CAR_SPAWN_POSITION,
   settings: {
     shadows: true,
     postProcessing: true,
