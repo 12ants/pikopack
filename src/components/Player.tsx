@@ -110,7 +110,7 @@ function CharacterModel({
   //   feet  pivot @ root y=0,  leg mesh centre y = -0.35  → feet bottom @ -0.7
   //   → offset root by +0.2 so feet sit at ≈ -0.5
   return (
-    <group ref={rootRef} position={[0, -0.3, 0]}>
+    <group ref={rootRef} position={[0, 0.3, 0]}>
       {/* ── Legs (pivot at hip) ────────────────────────────── */}
       <group ref={leftLegRef} position={[0.17, 0, 0]}>
         <mesh position={[0, -0.35, 0]} castShadow>
@@ -212,7 +212,7 @@ export function Player() {
     position: playerPosition,
     args: [0.5],
     fixedRotation: true,
-    linearDamping: 0.9,  // enough to stop smoothly without feeling sluggish
+    linearDamping: 0.45,  // high damping kills velocity before it builds; 0.45 is responsive yet stops cleanly
     angularDamping: 1,
     allowSleep: false,
   }), meshRef);
@@ -311,10 +311,13 @@ export function Player() {
       if (!meshRef.current) { wasWalking.current = true; }
       else {
         meshRef.current.getWorldPosition(_playerPos);
-        const dx = _playerPos.x - x;
-        const dz = _playerPos.z - z;
+        // camYaw is the angle the camera sits at around the player.
+        // We want the camera to be behind (from player's perspective) — i.e.
+        // pointing from player toward where the camera currently is.
+        const dx = x - _playerPos.x;
+        const dz = z - _playerPos.z;
         if (Math.abs(dx) + Math.abs(dz) > 0.1) {
-          camYaw.current = Math.atan2(dx, dz); // face camera toward player initially
+          camYaw.current = Math.atan2(dx, dz);
         }
         wasWalking.current = true;
       }
@@ -347,8 +350,9 @@ export function Player() {
     // A/D strafes left/right, W/S moves forward/back.
     _camYawEuler.set(0, camYaw.current, 0);
 
+    // Three.js convention: -Z is forward. Map WASD to (right=+X, forward=-Z).
     let mx = Number(right) - Number(left);
-    let mz = Number(forward) - Number(backward);
+    let mz = Number(backward) - Number(forward);  // forward key → negative Z
     const inputLen = Math.sqrt(mx * mx + mz * mz);
     if (inputLen > 1) { mx /= inputLen; mz /= inputLen; } // normalise diagonal
 
