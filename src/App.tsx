@@ -25,6 +25,7 @@ import { Player } from './components/Player';
 import { Leva } from 'leva';
 import { Sky, Environment, PerspectiveCamera, SoftShadows } from '@react-three/drei';
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
+import { Perf } from 'r3f-perf';
 import { useGameStore, globalCarPosition, CAR_SPAWN_POSITION } from './store';
 import { useState, useEffect, useRef } from 'react';
 
@@ -106,6 +107,8 @@ export default function App() {
             <Vignette eskil={false} offset={0.1} darkness={1.1} />
           </EffectComposer>
         )}
+
+        {settings.devInfo && <Perf position="bottom-right" />}
 
           {/* Stats removed to prevent InvalidStateError: CanvasRenderingContext2D.drawImage: Passed-in canvas is empty */}
         </Canvas>
