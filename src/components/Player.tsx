@@ -219,14 +219,8 @@ export function Player() {
       
       const desiredVelocityX = THREE.MathUtils.lerp(currentVelocityX, direction.x, lerpFactor);
       const desiredVelocityZ = THREE.MathUtils.lerp(currentVelocityZ, direction.z, lerpFactor);
-      
-      // Use forces to move so we don't overwrite the Y velocity (which breaks gravity)
-      const mass = 70;
-      const forceMultiplier = 10; // Adjust for responsiveness
-      const forceX = (desiredVelocityX - currentVelocityX) * mass * forceMultiplier;
-      const forceZ = (desiredVelocityZ - currentVelocityZ) * mass * forceMultiplier;
-      
-      api.applyLocalForce([forceX, 0, forceZ], [0, 0, 0]);
+
+      api.velocity?.set(desiredVelocityX, velocity.current[1], desiredVelocityZ);
       
       // Jump
       const currentVelocityY = velocity.current[1];
