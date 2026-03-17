@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 
 export const LOCATIONS: [number, number, number][] = [];
-// Parking lot: road junction at the city grid center-left, flat asphalt, clear of buildings
-export const CAR_SPAWN_POSITION: [number, number, number] = [-40, 1, -40];
+// Starting position: outside town to the south, on the straight approach road
+export const CAR_SPAWN_POSITION: [number, number, number] = [0, 1, 280];
 
 // Intersections
 const intersections = [-120, -40, 40, 120];

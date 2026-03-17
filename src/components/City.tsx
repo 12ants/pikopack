@@ -79,10 +79,12 @@ function StreetLight({ position, rotation }: { position: [number, number, number
   const shadows = useGameStore(s => s.settings.shadows);
   const [ref] = useBox(() => ({
     type: destructibles ? 'Dynamic' : 'Static',
-    mass: destructibles ? 50 : 0,
+    mass: destructibles ? 300 : 0,
     position: [position[0], position[1] + 4, position[2]],
     rotation,
     args: [0.5, 8, 0.5],
+    linearDamping: 0.5,
+    angularDamping: 0.95,
     allowSleep: true,
   }), useRef<THREE.Group>(null));
 
@@ -117,10 +119,12 @@ function StreetSign({ position, rotation }: { position: [number, number, number]
   const shadows = useGameStore(s => s.settings.shadows);
   const [ref] = useBox(() => ({
     type: destructibles ? 'Dynamic' : 'Static',
-    mass: destructibles ? 20 : 0,
+    mass: destructibles ? 150 : 0,
     position: [position[0], position[1] + 2, position[2]],
     rotation,
     args: [0.4, 4, 0.4],
+    linearDamping: 0.5,
+    angularDamping: 0.95,
     allowSleep: true,
   }), useRef<THREE.Group>(null));
 
@@ -143,10 +147,12 @@ function TrafficLight({ position, rotation, offset = 0 }: { position: [number, n
   const shadows = useGameStore(s => s.settings.shadows);
   const [ref] = useBox(() => ({
     type: destructibles ? 'Dynamic' : 'Static',
-    mass: destructibles ? 50 : 0,
+    mass: destructibles ? 300 : 0,
     position: [position[0], position[1] + 3, position[2]],
     rotation,
     args: [0.5, 6, 0.5],
+    linearDamping: 0.5,
+    angularDamping: 0.95,
     allowSleep: true,
   }), useRef<THREE.Group>(null));
 
@@ -245,9 +251,11 @@ function Crate({ position }: { position: [number, number, number] }) {
   const shadows = useGameStore(s => s.settings.shadows);
   const [ref] = useBox(() => ({
     type: destructibles ? 'Dynamic' : 'Static',
-    mass: destructibles ? 20 : 0,
+    mass: destructibles ? 80 : 0,
     position,
     args: [1.5, 1.5, 1.5],
+    linearDamping: 0.3,
+    angularDamping: 0.7,
   }), useRef<THREE.Mesh>(null));
 
   return (
